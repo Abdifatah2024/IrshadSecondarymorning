@@ -1,0 +1,168 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider          = "postgresql"
+  url               = env("DATABASE_URL")
+  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
+}
+
+model User {
+  id              Int          @id @default(autoincrement())
+  fullName        String
+  username        String       @unique
+  email           String       @unique
+  phoneNumber     String?      @unique
+  password        String
+  confirmpassword String // Hashed password
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  notes           note[]
+  tasks           task[]
+  classes         classes[]
+  students        Student[]
+  StudentFee      StudentFee[]
+  Attendance      Attendance[]
+  Score           Score[]
+}
+
+model note {
+  id           Int      @id @default(autoincrement())
+  NoteContent  String
+  created_Date DateTime @default(now())
+  updated_at   DateTime @updatedAt
+  userId       Int
+  user         User     @relation(fields: [userId], references: [id])
+}
+
+model task {
+  id          Int      @id @default(autoincrement())
+  title       String
+  description String
+  due_date    DateTime
+  completed   Boolean  @default(false)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+  userId      Int
+  user        User     @relation(fields: [userId], references: [id])
+}
+
+model classes {
+  id      Int       @id @default(autoincrement())
+  name    String
+  userid  Int
+  user    User      @relation(fields: [userid], references: [id])
+  Student Student[]
+}
+
+model Student {
+  id         Int          @id @default(autoincrement())
+  firstname  String
+  middlename String
+  lastname   String
+  fullname   String
+  classId    Int
+  phone      String
+  gender     String
+  Age        Int
+  fee        Float
+  Amount     Float
+  isdeleted  Boolean      @default(false)
+  classes    classes      @relation(fields: [classId], references: [id])
+  userid     Int
+  user       User         @relation(fields: [userid], references: [id])
+  StudentFee StudentFee[]
+  Payment    Payment[]
+  Attendance Attendance[]
+  Score      Score[]
+}
+
+model StudentFee {
+  id        Int       @id @default(autoincrement())
+  studentId Int
+  student   Student   @relation(fields: [studentId], references: [id])
+  month     Int
+  year      Int
+  userId    Int
+  user      User      @relation(fields: [userId], references: [id])
+  amount    Float // Required fee for this student
+  Payment   Payment[]
+}
+
+model Payment {
+  id         Int        @id @default(autoincrement())
+  studentId  Int
+  student    Student    @relation(fields: [studentId], references: [id])
+  month      Int // Represents the month (1-12)
+  year       Int // Represents the year (e.g., 2025)
+  FeeId      Int
+  fee        StudentFee @relation(fields: [FeeId], references: [id])
+  userId     Int
+  amountPaid Float // Amount paid by the student
+  discount   Float // Discount given, if any
+  balance    Float // Remaining balance after payment
+  date       DateTime   @default(now()) // Payment date
+}
+
+model Attendance {
+  id        Int      @id @default(autoincrement())
+  date      DateTime @default(now())
+  present   Boolean
+  remark    String?
+  studentId Int
+  userId    Int
+  student   Student  @relation(fields: [studentId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+enum ExamType {
+  MONTHLY
+  MIDTERM
+  FINAL
+}
+
+model Exam {
+  id             Int           @id @default(autoincrement())
+  name           String        @unique
+  type           ExamType
+  maxMarks       Int
+  scores         Score[]
+  AcademicYear   AcademicYear? @relation(fields: [academicYearId], references: [id])
+  academicYearId Int?
+}
+
+model Subject {
+  id             Int           @id @default(autoincrement())
+  name           String        @unique
+  scores         Score[]
+  AcademicYear   AcademicYear? @relation(fields: [academicYearId], references: [id])
+  academicYearId Int?
+}
+
+model Score {
+  id             Int           @id @default(autoincrement())
+  student        Student       @relation(fields: [studentId], references: [id])
+  studentId      Int
+  subject        Subject       @relation(fields: [subjectId], references: [id])
+  subjectId      Int
+  exam           Exam          @relation(fields: [examId], references: [id])
+  examId         Int
+  marks          Int
+  userid         Int
+  user           User          @relation(fields: [userid], references: [id])
+  AcademicYear   AcademicYear? @relation(fields: [academicYearId], references: [id])
+  academicYearId Int?
+}
+
+model AcademicYear {
+  id   Int    @id @default(autoincrement())
+  year String @unique // e.g., "2024-2025"
+
+  exams    Exam[]
+  score    Score[]
+  subjects Subject[]
+}
