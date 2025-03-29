@@ -10,6 +10,7 @@ import {
   getClasses,
   getStudentById,
   getStudents,
+  getStudentsByClass,
   markAttendance,
   updateAttendance,
   updateStudent,
@@ -21,6 +22,7 @@ router.post("/createattedence", authenticate, markAttendance);
 
 router.post("/createclass", authenticate, createclass);
 router.get("/studentList", getStudents);
+router.get("/ClassList/:classId", getStudentsByClass);
 router.get("/attedencelist/:id", getAttendance);
 
 router.get("/classtList", getClasses);

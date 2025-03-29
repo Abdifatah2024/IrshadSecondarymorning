@@ -8,6 +8,7 @@ import {
   updateUser,
   deleteUser,
   whoami,
+  getUser,
 } from "../controller/user.controller";
 import { authenticate } from "../middlewares/authaniticator";
 
@@ -18,6 +19,8 @@ const router = Router();
 router.post("/register", register);
 router.post("/login", login);
 router.get("/userinfo/:id", userinfo);
+router.get("/userinfo/:id", getUser);
+
 router.get("/list", users);
 router.put("/:id", updateUser);
 router.delete("/:id", deleteUser);

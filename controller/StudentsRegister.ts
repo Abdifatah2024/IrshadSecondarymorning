@@ -19,20 +19,14 @@ export const createStudent = async (req: Request, res: Response) => {
     } = req.body;
     // @ts-ignore
     const user = req.user;
-
-    const fullname = `${firstname} ${middlename} ${lastname}`;
-    // Check if student with the same name already exists
     const checkStudent = await prisma.student.findFirst({
-      where: {
-        fullname: fullname,
-        classId: classId,
-      },
+      where: { phone },
     });
     if (checkStudent) {
-      return res
-        .status(400)
-        .json({ message: "Student with the same name already exists" });
+      return res.status(400).json({ message: "Phone number already exists" });
     }
+
+    const fullname = `${firstname} ${middlename} ${lastname}`;
 
     const newStudent = await prisma.student.create({
       data: {
@@ -46,7 +40,7 @@ export const createStudent = async (req: Request, res: Response) => {
         Age,
         fee,
         Amount,
-        userid: user.userid,
+        userid: user.useId,
       },
     });
 
@@ -116,6 +110,21 @@ export const getStudentById = async (req: Request, res: Response) => {
   } catch (error) {
     console.error("Error fetching student:", error);
     res.status(500).json({ message: "Server error while fetching student" });
+  }
+};
+// Get Student from Specific Class
+export const getStudentsByClass = async (req: Request, res: Response) => {
+  try {
+    const { classId } = req.params; // Get classId from request parameters
+
+    const students = await prisma.student.findMany({
+      where: { classId: parseInt(classId) }, // Ensure classId is an integer if it's a number
+    });
+
+    res.status(200).json({ students });
+  } catch (error) {
+    console.error("Error fetching students:", error);
+    res.status(500).json({ message: "Server error while fetching students" });
   }
 };
 

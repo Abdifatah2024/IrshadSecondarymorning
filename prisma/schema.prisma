@@ -11,6 +11,12 @@ datasource db {
   shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
 }
 
+enum Role {
+  ADMIN
+  USER
+  Teacher
+}
+
 model User {
   id              Int          @id @default(autoincrement())
   fullName        String
@@ -28,6 +34,7 @@ model User {
   StudentFee      StudentFee[]
   Attendance      Attendance[]
   Score           Score[]
+  role            Role         @default(USER)
 }
 
 model note {

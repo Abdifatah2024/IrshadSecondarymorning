@@ -1,4 +1,4 @@
-import { PrismaClient, User } from "@prisma/client";
+import { PrismaClient, Role, User } from "@prisma/client";
 import { Request, Response } from "express";
 const prisma = new PrismaClient();
 import bcryptjs from "bcryptjs";
@@ -13,6 +13,7 @@ interface ICreateUser {
   password: string;
   fullName: string;
   phoneNumber: string;
+  role: Role;
 }
 
 // controller functions
@@ -24,11 +25,16 @@ export const register = async (req: Request, res: Response) => {
     // Convert to lowercase for case-insensitive search
     const lowerUsername = username.toLowerCase();
     const lowerEmail = email.toLowerCase();
+    const lowerPhoneNumber = phoneNumber.toLowerCase();
 
     // Check if username or email already exists
     const existingUser = await prisma.user.findFirst({
       where: {
-        OR: [{ username: lowerUsername }, { email: lowerEmail }],
+        OR: [
+          { username: lowerUsername },
+          { email: lowerEmail },
+          { phoneNumber: lowerPhoneNumber },
+        ],
       },
     });
 
@@ -39,7 +45,11 @@ export const register = async (req: Request, res: Response) => {
       if (existingUser.email === lowerEmail) {
         return res.status(400).json({ message: "Email already exists" });
       }
+      if (existingUser.phoneNumber === lowerPhoneNumber) {
+        return res.status(400).json({ message: "Phone number already exists" });
+      }
     }
+    //check if the phone number is already
 
     // Hash password
     const hashedPassword = bcryptjs.hashSync(password);
@@ -171,7 +181,8 @@ export const users = async (req: Request, res: Response) => {
 
 export const updateUser = async (req: Request, res: Response) => {
   try {
-    const { username, password, fullName, email } = req.body as ICreateUser;
+    const { username, password, fullName, email, role } =
+      req.body as ICreateUser;
     const userid = req.params.id;
     const updateduser = await prisma.user.findFirst({
       where: {
@@ -196,6 +207,7 @@ export const updateUser = async (req: Request, res: Response) => {
         confirmpassword: password,
         email,
         fullName,
+        role,
       },
     });
 
@@ -266,6 +278,30 @@ export const whoami = async (req: Request, res: Response) => {
     res.json({
       msg: "success",
       user: userinfo,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      msg: "Unauthorized3",
+    });
+  }
+};
+// get user detail
+export const getUser = async (req: Request, res: Response) => {
+  try {
+    const userId = req.params.id;
+    const user = await prisma.user.findFirst({
+      where: {
+        id: +userId,
+      },
+    });
+    if (!user) {
+      return res.status(404).json({
+        msg: "User not found",
+      });
+    }
+    res.json({
+      msg: "success",
+      user,
     });
   } catch (error) {
     return res.status(500).json({
