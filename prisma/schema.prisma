@@ -27,6 +27,8 @@ model User {
   confirmpassword String // Hashed password
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
+  photoUrl        String?      @default("Null")
+  photoUpdatedAt  DateTime?
   notes           note[]
   tasks           task[]
   classes         classes[]

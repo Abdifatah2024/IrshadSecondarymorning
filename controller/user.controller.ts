@@ -5,7 +5,9 @@ import bcryptjs from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { isFloat64Array } from "util/types";
 import { channel } from "diagnostics_channel";
-
+import { v4 as uuidv4 } from "uuid";
+import path from "path";
+import multer from "multer";
 //interface
 interface ICreateUser {
   username: string;
@@ -77,6 +79,85 @@ export const register = async (req: Request, res: Response) => {
     });
   }
 };
+// update user photo
+// Add these imports if needed
+
+// Configure multer storage
+const storage = multer.diskStorage({
+  destination: "uploads/",
+  filename: (req, file, cb) => {
+    const uniqueSuffix = uuidv4();
+    const ext = path.extname(file.originalname);
+    cb(null, `user-${uniqueSuffix}${ext}`);
+  },
+});
+
+// File filter for image only
+const fileFilter = (req: any, file: any, cb: any) => {
+  if (file.mimetype.startsWith("image")) {
+    cb(null, true);
+  } else {
+    cb(new Error("Only image files are allowed!"), false);
+  }
+};
+
+export const upload = multer({
+  storage: storage,
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB
+  },
+  fileFilter: fileFilter,
+});
+
+// Updated photo handler
+export const uploadUserPhoto = async (req: Request, res: Response) => {
+  try {
+    // Get authenticated user ID
+    //@ts-ignore
+    const user = req.user;
+    const userId = user.useId;
+
+    if (!userId) {
+      return res.status(401).json({ message: "Authentication required" });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ message: "No file uploaded" });
+    }
+
+    // Rest of your code remains the same...
+    const photoUrl = `${req.protocol}://${req.get("host")}/uploads/${
+      req.file.filename
+    }`;
+
+    const updatedUser = await prisma.user.update({
+      where: { id: userId }, // Now properly defined
+      data: {
+        photoUrl: photoUrl,
+        photoUpdatedAt: new Date(),
+      },
+      select: {
+        id: true,
+        username: true,
+        photoUrl: true,
+        photoUpdatedAt: true,
+      },
+    });
+
+    res.status(200).json({
+      status: "success",
+      data: {
+        user: updatedUser,
+      },
+    });
+  } catch (error) {
+    console.error("Photo upload error:", error);
+    res.status(500).json({
+      status: "error",
+      message: "Failed to upload photo",
+    });
+  }
+};
 
 // create login User
 
@@ -118,6 +199,7 @@ export const login = async (req: Request, res: Response) => {
     res.status(200).json({
       message: "Successfully logged in!",
       user: {
+        id: checkUser.id,
         email: checkUser.email,
         username: checkUser.username,
         fullname: checkUser.fullName,
@@ -127,6 +209,105 @@ export const login = async (req: Request, res: Response) => {
   } catch (error) {
     return res.status(500).json({
       message: "Failed to login. Please contact support team.",
+    });
+  }
+};
+// change user password.
+// export const changePassword = async (req: Request, res: Response) => {
+//   try {
+//     const { userId, oldPassword, newPassword } = req.body;
+
+//     // 1. Find the user
+//     const user = await prisma.user.findUnique({
+//       where: { id: +userId },
+//     });
+
+//     if (!user) {
+//       return res.status(404).json({ message: "User not found" });
+//     }
+
+//     // 2. Verify old password
+//     const isPasswordValid = bcryptjs.compareSync(oldPassword, user.password);
+//     if (!isPasswordValid) {
+//       return res.status(401).json({ message: "Invalid old password" });
+//     }
+//     //
+
+//     // 3. Hash new password
+//     const hashedNewPassword = bcryptjs.hashSync(newPassword);
+
+//     // 4. Update password in database
+//     const updatedUser = await prisma.user.update({
+//       where: { id: userId },
+//       data: {
+//         password: hashedNewPassword,
+//         confirmpassword: hashedNewPassword, // Update confirmpassword as well
+//       },
+//     });
+
+//     // 5. Omit sensitive fields from response
+//     const { password, confirmpassword, ...safeUser } = updatedUser;
+
+//     return res.status(200).json({
+//       user: safeUser,
+//       message: "Password changed successfully",
+//     });
+//   } catch (error) {
+//     console.error("Password change error:", error);
+//     return res.status(500).json({
+//       message: "Internal server error",
+//     });
+//   }
+// };
+export const changePassword = async (req: Request, res: Response) => {
+  try {
+    const { userId, oldPassword, newPassword } = req.body;
+
+    // 1. Find the user
+    const user = await prisma.user.findUnique({
+      where: { id: +userId },
+    });
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // 2. Verify old password
+    const isPasswordValid = bcryptjs.compareSync(oldPassword, user.password);
+    if (!isPasswordValid) {
+      return res.status(401).json({ message: "Invalid old password" });
+    }
+
+    // 3. Check if new password is different from old password
+    if (oldPassword === newPassword) {
+      return res.status(400).json({
+        message: "New password must be different from old password",
+      });
+    }
+
+    // 4. Hash new password
+    const hashedNewPassword = bcryptjs.hashSync(newPassword);
+
+    // 5. Update password in database
+    const updatedUser = await prisma.user.update({
+      where: { id: +userId },
+      data: {
+        password: hashedNewPassword,
+        confirmpassword: hashedNewPassword,
+      },
+    });
+
+    // 6. Omit sensitive fields from response
+    const { password, confirmpassword, ...safeUser } = updatedUser;
+
+    return res.status(200).json({
+      user: safeUser,
+      message: "Password changed successfully",
+    });
+  } catch (error) {
+    console.error("Password change error:", error);
+    return res.status(500).json({
+      message: "Internal server error",
     });
   }
 };

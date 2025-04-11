@@ -250,7 +250,7 @@ export const createclass = async (req: Request, res: Response) => {
     const newClass = await prisma.classes.create({
       data: {
         name: name,
-        userid: user.userid,
+        userid: user.useId,
       },
     });
     res

@@ -1,15 +1,44 @@
+// import dotenv from "dotenv";
+// dotenv.config();
+// import express from "express";
+// import { PrismaClient } from "@prisma/client";
+// const prisma = new PrismaClient();
+// import userRouter from "../routes/usrroures";
+// import noteRouter from "../routes/note";
+// import studentRouter from "../routes/StudentReg";
+// import examtypeRouter from "../routes/Exam";
+// import cors from "cors";
+// const app = express();
+// //midle ware//
+// app.use(express.json());
+// app.use(
+//   cors({
+//     origin: ["http://localhost:5173", "http://localhost:3001"],
+//     credentials: true,
+//     methods: ["GET", "POST", "PUT", "DELETE"],
+//   })
+// );
+
+// const port = process.env.PORT;
+
+// app.use("/user", userRouter);
+// app.use("/Note", noteRouter);
+// app.use("/student", studentRouter);
+// app.use("/exam", examtypeRouter);
+// app.listen(port, () => console.log("app listening on port " + port));
+import "dotenv/config"; // Load environment variables FIRST
 import express from "express";
-import dotenv from "dotenv";
 import { PrismaClient } from "@prisma/client";
+const prisma = new PrismaClient();
 import userRouter from "../routes/usrroures";
 import noteRouter from "../routes/note";
 import studentRouter from "../routes/StudentReg";
 import examtypeRouter from "../routes/Exam";
 import cors from "cors";
-dotenv.config();
 
 const app = express();
-//midle ware//
+
+// Middleware
 app.use(express.json());
 app.use(
   cors({
@@ -19,10 +48,34 @@ app.use(
   })
 );
 
-const port = process.env.PORT;
+// Fix 1: Add proper port handling
+const port = process.env.PORT ? parseInt(process.env.PORT) : 3000; // Convert to number and add fallback
 
+// Fix 2: Add basic health check endpoint
+app.get("/health", (req, res) => {
+  res.status(200).json({ status: "ok" });
+});
+
+// Routes
 app.use("/user", userRouter);
 app.use("/Note", noteRouter);
 app.use("/student", studentRouter);
 app.use("/exam", examtypeRouter);
-app.listen(port, () => console.log("app listening on port " + port));
+
+// Fix 3: Add error handling middleware
+app.use(
+  (
+    err: Error,
+    req: express.Request,
+    res: express.Response,
+    next: express.NextFunction
+  ) => {
+    console.error(err.stack);
+    res.status(500).send("Something broke!");
+  }
+);
+
+app.listen(port, () => {
+  console.log(`Server running on port ${port}`); // Should now show actual port
+  console.log(`Environment: ${process.env.NODE_ENV || "development"}`);
+});
