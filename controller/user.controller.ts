@@ -8,6 +8,9 @@ import { channel } from "diagnostics_channel";
 import { v4 as uuidv4 } from "uuid";
 import path from "path";
 import multer from "multer";
+import validator from "validator";
+const SALT_ROUNDS = 12;
+
 //interface
 interface ICreateUser {
   username: string;
@@ -16,69 +19,119 @@ interface ICreateUser {
   fullName: string;
   phoneNumber: string;
   role: Role;
+  photoUrl: string;
 }
 
-// controller functions
 export const register = async (req: Request, res: Response) => {
   try {
-    const { username, password, email, fullName, phoneNumber } =
+    const { username, password, email, fullName, phoneNumber, photoUrl } =
       req.body as ICreateUser;
 
-    // Convert to lowercase for case-insensitive search
-    const lowerUsername = username.toLowerCase();
-    const lowerEmail = email.toLowerCase();
-    const lowerPhoneNumber = phoneNumber.toLowerCase();
+    // Validate input fields
+    if (!username || !password || !email || !fullName || !phoneNumber) {
+      return res.status(400).json({ message: "All fields are required" });
+    }
 
-    // Check if username or email already exists
+    // Validate email format
+    if (!validator.isEmail(email)) {
+      return res.status(400).json({ message: "Invalid email format" });
+    }
+
+    // Validate password strength
+    if (
+      !validator.isStrongPassword(password, {
+        minLength: 6,
+        minLowercase: 1,
+        minUppercase: 1,
+        minNumbers: 1,
+        minSymbols: 1,
+      })
+    ) {
+      return res.status(400).json({
+        message:
+          "Password must be at least 6 characters with 1 uppercase, 1 lowercase, 1 number, and 1 symbol",
+      });
+    }
+
+    // Validate phone number
+    if (!validator.isMobilePhone(phoneNumber)) {
+      return res.status(400).json({ message: "Invalid phone number" });
+    }
+
+    // Normalize input
+    const lowerUsername = username.toLowerCase().trim();
+    const lowerEmail = email.toLowerCase().trim();
+    const normalizedPhone = phoneNumber.replace(/\D/g, ""); // Remove non-digit characters
+
+    // Check for existing user
     const existingUser = await prisma.user.findFirst({
       where: {
         OR: [
           { username: lowerUsername },
           { email: lowerEmail },
-          { phoneNumber: lowerPhoneNumber },
+          { phoneNumber: normalizedPhone },
         ],
       },
     });
 
     if (existingUser) {
       if (existingUser.username === lowerUsername) {
-        return res.status(400).json({ message: "Username already exists" });
+        return res.status(409).json({ message: "Username already exists" });
       }
       if (existingUser.email === lowerEmail) {
-        return res.status(400).json({ message: "Email already exists" });
+        return res.status(409).json({ message: "Email already exists" });
       }
-      if (existingUser.phoneNumber === lowerPhoneNumber) {
-        return res.status(400).json({ message: "Phone number already exists" });
+      if (existingUser.phoneNumber === normalizedPhone) {
+        return res.status(409).json({ message: "Phone number already exists" });
       }
     }
-    //check if the phone number is already
 
     // Hash password
-    const hashedPassword = bcryptjs.hashSync(password);
+    const hashedPassword = await bcryptjs.hash(password, SALT_ROUNDS);
 
     // Create new user
     const newUser = await prisma.user.create({
       data: {
         username: lowerUsername,
         password: hashedPassword,
-        confirmpassword: hashedPassword,
         email: lowerEmail,
-        fullName,
-        phoneNumber,
+        fullName: fullName.trim(),
+        phoneNumber: normalizedPhone,
+        photoUrl: photoUrl?.trim(),
+        emailVerified: false, // Add email verification flag
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        confirmpassword: hashedPassword,
+      },
+      select: {
+        // Don't return sensitive data
+        id: true,
+        username: true,
+        email: true,
+        fullName: true,
+        createdAt: true,
+        updatedAt: true,
       },
     });
 
+    // TODO: Send verification email
+    // await sendVerificationEmail(newUser.email, newUser.id);
+
     return res.status(201).json({
       user: newUser,
-      message: "Successfully registered",
+      message:
+        "Registration successful. Please check your email to verify your account.",
     });
   } catch (error) {
     console.error("Registration error:", error);
     return res.status(500).json({
-      message: "Server is down",
+      message: "An unexpected error occurred. Please try again later.",
     });
+  } finally {
+    await prisma.$disconnect();
   }
 };
+
 // update user photo
 // Add these imports if needed
 
@@ -213,52 +266,7 @@ export const login = async (req: Request, res: Response) => {
   }
 };
 // change user password.
-// export const changePassword = async (req: Request, res: Response) => {
-//   try {
-//     const { userId, oldPassword, newPassword } = req.body;
 
-//     // 1. Find the user
-//     const user = await prisma.user.findUnique({
-//       where: { id: +userId },
-//     });
-
-//     if (!user) {
-//       return res.status(404).json({ message: "User not found" });
-//     }
-
-//     // 2. Verify old password
-//     const isPasswordValid = bcryptjs.compareSync(oldPassword, user.password);
-//     if (!isPasswordValid) {
-//       return res.status(401).json({ message: "Invalid old password" });
-//     }
-//     //
-
-//     // 3. Hash new password
-//     const hashedNewPassword = bcryptjs.hashSync(newPassword);
-
-//     // 4. Update password in database
-//     const updatedUser = await prisma.user.update({
-//       where: { id: userId },
-//       data: {
-//         password: hashedNewPassword,
-//         confirmpassword: hashedNewPassword, // Update confirmpassword as well
-//       },
-//     });
-
-//     // 5. Omit sensitive fields from response
-//     const { password, confirmpassword, ...safeUser } = updatedUser;
-
-//     return res.status(200).json({
-//       user: safeUser,
-//       message: "Password changed successfully",
-//     });
-//   } catch (error) {
-//     console.error("Password change error:", error);
-//     return res.status(500).json({
-//       message: "Internal server error",
-//     });
-//   }
-// };
 export const changePassword = async (req: Request, res: Response) => {
   try {
     const { userId, oldPassword, newPassword } = req.body;
@@ -362,8 +370,7 @@ export const users = async (req: Request, res: Response) => {
 
 export const updateUser = async (req: Request, res: Response) => {
   try {
-    const { username, password, fullName, email, role } =
-      req.body as ICreateUser;
+    const { username, fullName, email, phoneNumber } = req.body as ICreateUser;
     const userid = req.params.id;
     const updateduser = await prisma.user.findFirst({
       where: {
@@ -377,18 +384,15 @@ export const updateUser = async (req: Request, res: Response) => {
       });
     }
 
-    const hashedPassword = await bcryptjs.hash(password, 10);
     const updatedUser = await prisma.user.update({
       where: {
         id: +userid,
       },
       data: {
         username,
-        password,
-        confirmpassword: password,
         email,
         fullName,
-        role,
+        phoneNumber,
       },
     });
 
@@ -402,7 +406,7 @@ export const updateUser = async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: "Error updating user" });
+    res.status(500).json({ message: "Error updating userr" });
   }
 };
 
@@ -444,11 +448,12 @@ const genarateToken = (username: User): string => {
     useId: username.id,
     userName: username.username,
     joined_at: username.createdAt,
+    role: username.role,
   };
 
   return jwt.sign(payload, process.env.JWT_SECRET_KEY as string, {
     issuer: "Api.Irshaad.com",
-    expiresIn: "1Days",
+    expiresIn: "1d",
   });
 };
 
@@ -488,5 +493,54 @@ export const getUser = async (req: Request, res: Response) => {
     return res.status(500).json({
       msg: "Unauthorized3",
     });
+  }
+};
+
+// Get user profile
+export const getUserProfile = async (req: Request, res: Response) => {
+  try {
+    const userId = parseInt(req.params.userId);
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        fullName: true,
+        username: true,
+        email: true,
+        photoUrl: true,
+        role: true,
+      },
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    res.status(200).json(user);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch user data" });
+  }
+};
+
+// Upload user photo
+export const uploadPhoto = async (req: Request, res: Response) => {
+  try {
+    const userId = parseInt(req.params.userId);
+    const file = req.file;
+
+    if (!file) {
+      return res.status(400).json({ error: "No file uploaded" });
+    }
+
+    const photoUrl = `/uploads/${file.filename}`;
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: { photoUrl, photoUpdatedAt: new Date() },
+    });
+
+    res.status(200).json({ photoUrl });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to upload photo" });
   }
 };

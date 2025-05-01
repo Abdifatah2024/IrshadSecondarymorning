@@ -1,5 +1,37 @@
-import { NextFunction, Request, Response } from "express";
+// import jwt from "jsonwebtoken";
+// import { Request, Response, NextFunction } from "express";
+
+// export const authenticate = async (
+//   req: Request,
+//   res: Response,
+//   next: NextFunction
+// ) => {
+//   try {
+//     const authHeader = req.headers.authorization;
+
+//     if (!authHeader || !authHeader.startsWith("Bearer ")) {
+//       return res.status(401).json({ message: "Unauthorized: No Token" });
+//     }
+
+//     const token = authHeader.split(" ")[1];
+
+//     const decoded = jwt.verify(token, process.env.JWT_SECRET_KEY as string);
+
+//     if (!decoded) {
+//       return res.status(401).json({ message: "Unauthorized: Invalid Token" });
+//     }
+
+//     // @ts-ignore
+//     req.user = decoded;
+
+//     next();
+//   } catch (error) {
+//     console.error("Auth error:", error);
+//     res.status(401).json({ message: "Unauthorized: Token Error" });
+//   }
+// };
 import jwt from "jsonwebtoken";
+import { Request, Response, NextFunction } from "express";
 
 export const authenticate = async (
   req: Request,
@@ -7,33 +39,41 @@ export const authenticate = async (
   next: NextFunction
 ) => {
   try {
-    const token =
-      req.headers.authorization?.startsWith("Bearer") &&
-      req.headers.authorization.split(" ")[1];
+    const authHeader = req.headers.authorization;
 
-    // CHECK IF THERE IS NOT TOKEN
-    if (!token) {
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
       return res.status(401).json({
-        message: "Unauthorized" + " NO TOKEN",
+        message: "Access denied. No token provided.",
       });
     }
+
+    const token = authHeader.split(" ")[1];
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET_KEY as string);
 
     if (!decoded) {
       return res.status(401).json({
-        message: "Unauthorized",
+        message: "Invalid token. Please log in again.",
       });
     }
 
     // @ts-ignore
     req.user = decoded;
-
-    // FORWARD THE REQUEST TO THE NEXT FUNCTION
     next();
-  } catch (error) {
+  } catch (error: any) {
+    console.error("Auth error:", error);
+
+    // Specific error for expired tokens
+    if (error.name === "TokenExpiredError") {
+      return res.status(401).json({
+        message: "Session expired. Please log in again.",
+        isTokenExpired: true, // Flag for frontend
+      });
+    }
+
+    // Other JWT errors (malformed, invalid signature, etc.)
     res.status(401).json({
-      message: "Unauthorized",
+      message: "Invalid authentication. Please log in again.",
     });
   }
 };

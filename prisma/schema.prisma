@@ -17,6 +17,35 @@ enum Role {
   Teacher
 }
 
+enum StudentStatus {
+  ACTIVE
+  INACTIVE
+  WARNING
+}
+
+// model User {
+//   id              Int          @id @default(autoincrement())
+//   fullName        String
+//   username        String       @unique
+//   email           String       @unique
+//   phoneNumber     String?      @unique
+//   password        String
+//   confirmpassword String // Hashed password
+//   createdAt       DateTime     @default(now())
+//   updatedAt       DateTime     @updatedAt
+//   photoUrl        String?      @default("Null")
+//   photoUpdatedAt  DateTime?
+//   emailVerified   Boolean?
+//   notes           note[]
+//   tasks           task[]
+//   classes         classes[]
+//   students        Student[]
+//   StudentFee      StudentFee[]
+//   Attendance      Attendance[]
+//   Score           Score[]
+//   role            Role         @default(USER)
+//   Discipline      Discipline[]
+// }
 model User {
   id              Int          @id @default(autoincrement())
   fullName        String
@@ -29,6 +58,7 @@ model User {
   updatedAt       DateTime     @updatedAt
   photoUrl        String?      @default("Null")
   photoUpdatedAt  DateTime?
+  emailVerified   Boolean?
   notes           note[]
   tasks           task[]
   classes         classes[]
@@ -37,6 +67,11 @@ model User {
   Attendance      Attendance[]
   Score           Score[]
   role            Role         @default(USER)
+  Discipline      Discipline[]
+
+  // 👇 Add these two fields:
+  resetToken        String? // for verification code
+  resetTokenExpires DateTime? // token expiry time
 }
 
 model note {
@@ -68,22 +103,58 @@ model classes {
   Student Student[]
 }
 
+// model Student {
+//   id              Int          @id @default(autoincrement())
+//   firstname       String
+//   middlename      String
+//   lastname        String
+//   fullname        String
+//   classId         Int
+//   phone           String
+//   gender          String
+//   Age             Int
+//   fee             Float
+//   Amount          Float
+//   Discipline      Discipline[]
+//   status          String?      @default("ACTIVE") // Could use enum
+//   absentCount     Int?         @default(0)
+//   lastWarningDate DateTime? // Optional warning tracking
+
+//   isdeleted  Boolean      @default(false)
+//   classes    classes      @relation(fields: [classId], references: [id])
+//   userid     Int
+//   user       User         @relation(fields: [userid], references: [id])
+//   StudentFee StudentFee[]
+//   Payment    Payment[]
+//   Attendance Attendance[]
+//   Score      Score[]
+// }
 model Student {
-  id         Int          @id @default(autoincrement())
-  firstname  String
-  middlename String
-  lastname   String
-  fullname   String
-  classId    Int
-  phone      String
-  gender     String
-  Age        Int
-  fee        Float
-  Amount     Float
-  isdeleted  Boolean      @default(false)
+  id              Int       @id @default(autoincrement())
+  firstname       String
+  middlename      String
+  lastname        String
+  fullname        String
+  classId         Int
+  phone           String
+  phone2          String? // New: second phone (optional)
+  bus             String? // New: bus route or number
+  address         String? // New: home address
+  previousSchool  String? // New: previous school name
+  motherName      String? // New: mother's full name
+  gender          String
+  Age             Int
+  fee             Float // Monthly school fee
+  status          String?   @default("ACTIVE") // Could use enum later
+  absentCount     Int?      @default(0)
+  lastWarningDate DateTime? // Optional warning tracking
+  isdeleted       Boolean   @default(false)
+
+  // Relations
   classes    classes      @relation(fields: [classId], references: [id])
   userid     Int
   user       User         @relation(fields: [userid], references: [id])
+  Discipline Discipline[]
   StudentFee StudentFee[]
   Payment    Payment[]
   Attendance Attendance[]
@@ -118,14 +189,16 @@ model Payment {
 }
 
 model Attendance {
-  id        Int      @id @default(autoincrement())
-  date      DateTime @default(now())
-  present   Boolean
-  remark    String?
-  studentId Int
-  userId    Int
-  student   Student  @relation(fields: [studentId], references: [id])
-  user      User     @relation(fields: [userId], references: [id])
+  id          Int      @id @default(autoincrement())
+  date        DateTime @default(now())
+  present     Boolean
+  remark      String?
+  studentId   Int
+  userId      Int
+  absentCount Int?
+  created_at  DateTime @default(now())
+  student     Student  @relation(fields: [studentId], references: [id])
+  user        User     @relation(fields: [userId], references: [id])
 }
 
 enum ExamType {
@@ -153,15 +226,16 @@ model Subject {
 }
 
 model Score {
-  id             Int           @id @default(autoincrement())
-  student        Student       @relation(fields: [studentId], references: [id])
-  studentId      Int
-  subject        Subject       @relation(fields: [subjectId], references: [id])
-  subjectId      Int
-  exam           Exam          @relation(fields: [examId], references: [id])
-  examId         Int
-  marks          Int
-  userid         Int
+  id        Int     @id @default(autoincrement())
+  student   Student @relation(fields: [studentId], references: [id])
+  studentId Int
+  subject   Subject @relation(fields: [subjectId], references: [id])
+  subjectId Int
+  exam      Exam    @relation(fields: [examId], references: [id])
+  examId    Int
+  marks     Int
+  userid    Int
+
   user           User          @relation(fields: [userid], references: [id])
   AcademicYear   AcademicYear? @relation(fields: [academicYearId], references: [id])
   academicYearId Int?
@@ -174,4 +248,18 @@ model AcademicYear {
   exams    Exam[]
   score    Score[]
   subjects Subject[]
+}
+
+model Discipline {
+  id          Int      @id @default(autoincrement())
+  studentId   Int
+  type        String // e.g., "Late", "Fighting", "Disrespect", etc.
+  description String // Detailed explanation of the incident
+  actionTaken String? // Optional: e.g., "Warning", "Suspension", "Detention"
+  recordedBy  Int // ID of the staff/user who recorded it
+  recordedAt  DateTime @default(now())
+  isDeleted   Boolean  @default(false)
+
+  student Student @relation(fields: [studentId], references: [id])
+  user    User    @relation(fields: [recordedBy], references: [id])
 }

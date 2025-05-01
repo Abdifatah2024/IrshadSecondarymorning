@@ -11,9 +11,15 @@ import {
   getUser,
   changePassword,
   uploadUserPhoto,
+  getUserProfile,
+  uploadPhoto,
 } from "../controller/user.controller";
 import { authenticate } from "../middlewares/authaniticator";
 import upload from "../src/config/multer";
+import {
+  sendResetCode,
+  verifyResetCodeAndChangePassword,
+} from "../controller/authController";
 
 // import { authenticate } from ";
 
@@ -31,7 +37,15 @@ router.post(
 );
 router.put("/changepassword", changePassword);
 router.put("/:id", updateUser);
+
 router.delete("/:id", deleteUser);
 router.get("/whoami", authenticate, whoami);
 
+//reset password.
+router.post("/send-reset-code", sendResetCode); // Send reset code
+router.post("/verify-reset-code", verifyResetCodeAndChangePassword); // Verify token + reset password
+
+/// user photo and profile.
+router.get("/photo/:userId", getUserProfile);
+router.post("/:userId/photo", upload.single("photo"), uploadPhoto);
 export default router;
