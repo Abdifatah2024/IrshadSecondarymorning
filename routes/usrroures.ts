@@ -1,5 +1,9 @@
 import { Router } from "express";
+// Middleware
+import { authenticate } from "../middlewares/authaniticator"; // ✅ Consider renaming to "authenticate.ts" for clarity
+import upload from "../src/config/multer";
 
+// Controllers
 import {
   login,
   register,
@@ -13,39 +17,53 @@ import {
   uploadUserPhoto,
   getUserProfile,
   uploadPhoto,
+  createEmployee,
+  getAllEmployees,
+  getEmployeeById,
+  updateEmployee,
+  deleteEmployee,
 } from "../controller/user.controller";
-import { authenticate } from "../middlewares/authaniticator";
-import upload from "../src/config/multer";
+
 import {
   sendResetCode,
   verifyResetCodeAndChangePassword,
 } from "../controller/authController";
 
-// import { authenticate } from ";
-
 const router = Router();
+
+/* --------------------------- Auth & Profile --------------------------- */
 router.post("/register", register);
 router.post("/login", login);
+router.get("/whoami", authenticate, whoami);
+
+/* ---------------------------- User CRUD ---------------------------- */
 router.get("/userinfo/:id", userinfo);
 router.get("/userinfo/:id", getUser);
 router.get("/list", users);
+router.put("/:id", updateUser);
+router.delete("/:id", deleteUser);
+
+/* ---------------------------- Password ---------------------------- */
+router.put("/changepassword", changePassword);
+router.post("/send-reset-code", sendResetCode);
+router.post("/verify-reset-code", verifyResetCodeAndChangePassword);
+
+/* ---------------------------- Uploads ---------------------------- */
 router.post(
   "/upload-photo",
   authenticate,
-  upload.single("photo"), // 'photo' matches the field name
+  upload.single("photo"),
   uploadUserPhoto
 );
-router.put("/changepassword", changePassword);
-router.put("/:id", updateUser);
 
-router.delete("/:id", deleteUser);
-router.get("/whoami", authenticate, whoami);
-
-//reset password.
-router.post("/send-reset-code", sendResetCode); // Send reset code
-router.post("/verify-reset-code", verifyResetCodeAndChangePassword); // Verify token + reset password
-
-/// user photo and profile.
 router.get("/photo/:userId", getUserProfile);
 router.post("/:userId/photo", upload.single("photo"), uploadPhoto);
+
+/* ---------------------------- Employee ---------------------------- */
+router.post("/employees", authenticate, createEmployee);
+router.get("/employees", getAllEmployees);
+router.get("/employees/:id", getEmployeeById);
+router.put("/employees/:id", updateEmployee);
+router.delete("/employees/:id", deleteEmployee);
+
 export default router;

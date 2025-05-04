@@ -47,31 +47,32 @@ enum StudentStatus {
 //   Discipline      Discipline[]
 // }
 model User {
-  id              Int          @id @default(autoincrement())
-  fullName        String
-  username        String       @unique
-  email           String       @unique
-  phoneNumber     String?      @unique
-  password        String
-  confirmpassword String // Hashed password
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
-  photoUrl        String?      @default("Null")
-  photoUpdatedAt  DateTime?
-  emailVerified   Boolean?
-  notes           note[]
-  tasks           task[]
-  classes         classes[]
-  students        Student[]
-  StudentFee      StudentFee[]
-  Attendance      Attendance[]
-  Score           Score[]
-  role            Role         @default(USER)
-  Discipline      Discipline[]
-
+  id                Int                 @id @default(autoincrement())
+  fullName          String
+  username          String              @unique
+  email             String              @unique
+  phoneNumber       String?             @unique
+  password          String
+  confirmpassword   String // Hashed password
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  photoUrl          String?             @default("Null")
+  photoUpdatedAt    DateTime?
+  emailVerified     Boolean?
+  notes             note[]
+  tasks             task[]
+  classes           classes[]
+  students          Student[]
+  StudentFee        StudentFee[]
+  Attendance        Attendance[]
+  Score             Score[]
+  role              Role                @default(USER)
+  Discipline        Discipline[]
+  Employee          Employee[]
   // 👇 Add these two fields:
   resetToken        String? // for verification code
   resetTokenExpires DateTime? // token expiry time
+  DisciplineComment DisciplineComment[]
 }
 
 model note {
@@ -260,6 +261,48 @@ model Discipline {
   recordedAt  DateTime @default(now())
   isDeleted   Boolean  @default(false)
 
-  student Student @relation(fields: [studentId], references: [id])
-  user    User    @relation(fields: [recordedBy], references: [id])
+  student           Student             @relation(fields: [studentId], references: [id])
+  user              User                @relation(fields: [recordedBy], references: [id])
+  DisciplineComment DisciplineComment[]
+}
+
+model Employee {
+  id          Int      @id @default(autoincrement())
+  fullName    String
+  dateOfBirth DateTime
+  gender      String
+  nationalId  String   @unique
+  phone       String
+  email       String   @unique
+  address     String
+
+  jobTitle   String
+  dateOfHire DateTime
+
+  education String
+
+  bankAccount String
+  salary      Float
+
+  appraisalRecords    String?
+  disciplinaryActions String?
+
+  // Relationship to User (creator)
+  createdById Int
+  createdBy   User @relation(fields: [createdById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model DisciplineComment {
+  id           Int      @id @default(autoincrement())
+  content      String
+  createdAt    DateTime @default(now())
+  disciplineId Int
+  userId       Int
+
+  // Relations
+  discipline Discipline @relation(fields: [disciplineId], references: [id])
+  user       User       @relation(fields: [userId], references: [id])
 }

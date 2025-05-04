@@ -1,110 +1,93 @@
 import { Router } from "express";
+// Middlewares
 import { authenticate } from "../middlewares/authaniticator";
+import { authorize } from "../middlewares/autharize";
+// Controllers
 import {
+  createStudent,
+  createMultipleStudents,
   createMultipleStudentsByExcel,
   upload,
-} from "../controller/StudentsRegister";
-import {
-  backFromSoftDelete,
   createclass,
-  createStudent,
-  deletepermitly,
+  updateStudent,
+  updateStudentClass,
   deleteStudent,
-  getAttendance,
-  getClasses,
-  getStudentById,
+  deletepermitly,
+  backFromSoftDelete,
   getStudents,
+  getClasses,
   getStudentsByClass,
+  getStudentById,
+  getStudentByIdOrName,
   listSoftDeletedStudents,
   markAttendance,
   markAbsenteesBulk,
   updateAttendance,
-  updateStudent,
-  updateStudentClass,
+  updateStudentAttendance,
   deleteAttendance,
+  getAttendance,
   getAllAbsenteesByDate,
   getTopAbsentStudents,
-  getStudentByIdOrName,
-  createMultipleStudents,
-  updateStudentAttendance,
 } from "../controller/StudentsRegister";
-import { authorize } from "../middlewares/autharize";
+
+import { getYearlyProgressReportByStudent } from "../controller/exam.controller";
+
 const router = Router();
 
-// // Note: marka wax la update gareynaayo ka ugu horeeya ayey ku dhaceysaa.
-
-// router.put("/updateAttednce", authenticate, updateAttendance);
-// router.put("/attendance/:id", updateStudentAttendance);
-
-// router.put("/updateClass", updateStudentClass);
-
-// router.post("/create", authenticate, authorize("ADMIN"), createStudent);
-// router.post("/createMultiple", authenticate, createMultipleStudents);
-// router.post("/upload", upload.single("file"), createMultipleStudentsByExcel);
-
-// // router.post("/createclass", authenticate, createclass);
-// router.post("/createclass", authenticate, authorize("ADMIN"), createclass);
-// router.get("/studentList", getStudents);
-
-// /// Absent Routes
-// router.get("/absentees", getAllAbsenteesByDate);
-
-// router.delete("/updateAttednce", deleteAttendance);
-// router.post("/attendance/mark-absentees", markAbsenteesBulk);
-// router.post("/createattedence", authenticate, markAttendance);
-
-// router.get("/students/soft-deleted", listSoftDeletedStudents);
-// router.get("/ClassList/:classId", getStudentsByClass);
-// router.get("/attedencelist/:id", getAttendance);
-
-// router.get("/classtList", getClasses);
-// router.get("/:id", getStudentById);
-// router.get("/:query", getStudentByIdOrName);
-
-// router.put("/softedelete/:id", deleteStudent);
-// router.put("/updateattadence/:id", authenticate, updateAttendance);
-// router.get("/attendance/top-absent", getTopAbsentStudents);
-
-// router.put("/backsoftedelete/:id", authenticate, backFromSoftDelete);
-// router.delete("/delete/:id", authenticate, deletepermitly);
-// router.delete("/attendance", authenticate, deletepermitly);
-
-// export default router;
-// Specific routes first
+/* ----------------------------- Student CRUD ----------------------------- */
 router.post("/create", authenticate, authorize("ADMIN"), createStudent);
 router.post("/createMultiple", authenticate, createMultipleStudents);
 router.post("/upload", upload.single("file"), createMultipleStudentsByExcel);
-router.post("/createclass", authenticate, authorize("ADMIN"), createclass);
-router.put("/updateClass", updateStudentClass);
+router.put("/updateClass", authenticate, updateStudentClass);
+router.put("/updateClass", authenticate, updateStudentClass);
 router.put("/:id", authenticate, updateStudent);
 
-// List routes
-router.get("/studentList", getStudents);
-router.get("/classtList", getClasses);
+/* ----------------------------- Class Routes ----------------------------- */
+router.post("/createclass", authenticate, authorize("ADMIN"), createclass);
 
-// Attendance and soft-delete routes
+router.get("/classListStd", getClasses);
+router.get("/ClassList/:classId", getStudentsByClass);
+
+/* ----------------------------- Student List ----------------------------- */
+router.get("/studentList", getStudents);
+
+/* ----------------------------- Attendance Routes ----------------------------- */
+router.get("/attedencelist/:id", getAttendance);
 router.get("/absentees", getAllAbsenteesByDate);
 router.get("/attendance/top-absent", getTopAbsentStudents);
-router.get("/students/soft-deleted", listSoftDeletedStudents);
-router.get("/ClassList/:classId", getStudentsByClass);
-router.get("/attedencelist/:id", getAttendance);
 
-// Attendance POST/PUT routes
 router.post("/attendance/mark-absentees", markAbsenteesBulk);
 router.post("/createattedence", authenticate, markAttendance);
 
+router.put("/attendance/:id", authenticate, updateStudentAttendance);
 router.put("/updateAttednce", authenticate, updateAttendance);
-router.put("/attendance/:id", updateStudentAttendance);
 router.put("/updateattadence/:id", authenticate, updateAttendance);
 
-// Soft delete and restore
-router.put("/softedelete/:id", deleteStudent);
-router.put("/backsoftedelete/:id", authenticate, backFromSoftDelete);
-router.delete("/delete/:id", authenticate, deletepermitly);
 router.delete("/attendance", authenticate, deleteAttendance);
 
-// ⚡ LAST: dynamic routes
+/* -------------------------- Soft Delete / Restore -------------------------- */
+router.get("/students/soft-deleted", listSoftDeletedStudents);
+router.put("/softedelete/:id", authenticate, deleteStudent);
+router.put("/backsoftedelete/:id", authenticate, backFromSoftDelete);
+router.delete("/delete/:id", authenticate, deletepermitly);
+
+/* ------------------------- Yearly Report (Future) ------------------------- */
+// router.get("/report/:studentId", getYearlyProgressReportByStudent);
+
+/* ------------------------ Dynamic Student Lookup ------------------------ */
 router.get("/:id", getStudentById);
 router.get("/:query", getStudentByIdOrName);
+
+// /* --------------------- WhatsApp Notification (Future) --------------------- */
+// router.post("/notify-absence", async (req, res) => {
+//   const { parentPhone, studentName, date } = req.body;
+//   try {
+//     await notifyAbsence(parentPhone, studentName, date);
+//     res.json({ success: true, message: "Notification sent" });
+//   } catch (error) {
+//     console.error(error);
+//     res.status(500).json({ error: "Failed to send message" });
+//   }
+// });
 
 export default router;

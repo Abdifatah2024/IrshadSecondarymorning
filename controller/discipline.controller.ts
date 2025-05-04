@@ -124,9 +124,45 @@ export const getDisciplineById = async (req: Request, res: Response) => {
 };
 
 // Get Discipline by Student ID
+// export const getDisciplineByStudentId = async (req: Request, res: Response) => {
+//   try {
+//     const studentId = Number(req.params.studentId);
+
+//     if (isNaN(studentId)) {
+//       return res.status(400).json({ message: "Invalid Student ID" });
+//     }
+
+//     const student = await prisma.student.findUnique({
+//       where: { id: studentId },
+//       include: {
+//         classes: {
+//           select: { name: true },
+//         },
+//         Discipline: {
+//           where: { isDeleted: false },
+//           orderBy: { recordedAt: "desc" },
+//         },
+//       },
+//     });
+
+//     if (!student) {
+//       return res.status(404).json({ message: "Student not found" });
+//     }
+
+//     res.status(200).json({
+//       id: student.id,
+//       fullname: student.fullname,
+//       className: student.classes.name,
+//       disciplines: student.Discipline,
+//     });
+//   } catch (error) {
+//     console.error("Error fetching student discipline:", error);
+//     res.status(500).json({ message: "Server error" });
+//   }
+// };
 export const getDisciplineByStudentId = async (req: Request, res: Response) => {
   try {
-    const studentId = Number(req.params.studentId);
+    const studentId = Number(req.params.id);
 
     if (isNaN(studentId)) {
       return res.status(400).json({ message: "Invalid Student ID" });
@@ -152,7 +188,7 @@ export const getDisciplineByStudentId = async (req: Request, res: Response) => {
     res.status(200).json({
       id: student.id,
       fullname: student.fullname,
-      className: student.classes.name,
+      className: student.classes?.name || "N/A",
       disciplines: student.Discipline,
     });
   } catch (error) {
@@ -216,5 +252,27 @@ export const deleteDiscipline = async (req: Request, res: Response) => {
   } catch (error) {
     console.error("Error deleting discipline record:", error);
     res.status(500).json({ message: "Server error while deleting discipline" });
+  }
+};
+export const addDisciplineComment = async (req: Request, res: Response) => {
+  try {
+    const disciplineId = Number(req.params.id);
+    const { content } = req.body;
+
+    // @ts-ignore
+    const user = req.user;
+
+    const comment = await prisma.disciplineComment.create({
+      data: {
+        content,
+        disciplineId,
+        userId: user.useId,
+      },
+    });
+
+    res.status(201).json({ message: "Comment added", comment });
+  } catch (err) {
+    console.error("Error adding comment:", err);
+    res.status(500).json({ message: "Server error while adding comment" });
   }
 };

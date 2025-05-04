@@ -1,5 +1,4 @@
 import { Router } from "express";
-
 import {
   createDiscipline,
   getAllDisciplines,
@@ -7,14 +6,24 @@ import {
   updateDiscipline,
   deleteDiscipline,
   getDisciplineByStudentId,
+  addDisciplineComment,
 } from "../controller/discipline.controller";
 import { authenticate } from "../middlewares/authaniticator";
+
 const router = Router();
 
+/* -------------------------- Create Discipline -------------------------- */
 router.post("/discipline", authenticate, createDiscipline);
-router.get("/discipline/:studentId", getDisciplineByStudentId);
+router.post("/discipline/:id", authenticate, addDisciplineComment);
+
+/* -------------------------- Get All Disciplines -------------------------- */
 router.get("/discipline", getAllDisciplines);
-router.get("/discipline/:id", getDisciplineById);
+
+/* ---------------------- Order Matters: studentId first ---------------------- */
+router.get("/discipline/student/:studentId", getDisciplineByStudentId); // more specific
+router.get("/discipline/:id", getDisciplineByStudentId); // generic ID
+
+/* -------------------------- Update & Delete -------------------------- */
 router.put("/discipline/:id", updateDiscipline);
 router.delete("/discipline/:id", deleteDiscipline);
 

@@ -290,22 +290,6 @@ export const getStudentByIdOrName = async (req: Request, res: Response) => {
   }
 };
 
-// Get Student from Specific Class
-export const getStudentsByClass = async (req: Request, res: Response) => {
-  try {
-    const { classId } = req.params; // Get classId from request parameters
-
-    const students = await prisma.student.findMany({
-      where: { classId: parseInt(classId) }, // Ensure classId is an integer if it's a number
-    });
-
-    res.status(200).json({ students });
-  } catch (error) {
-    console.error("Error fetching students:", error);
-    res.status(500).json({ message: "Server error while fetching students" });
-  }
-};
-
 // Update Student
 export const updateStudent = async (req: Request, res: Response) => {
   try {
@@ -548,6 +532,21 @@ export const getClasses = async (req: Request, res: Response) => {
   } catch (error) {
     console.error("Error fetching classes:", error);
     res.status(500).json({ message: "Server error while fetching classes" });
+  }
+};
+// Get Student from Specific Class
+export const getStudentsByClass = async (req: Request, res: Response) => {
+  try {
+    const { classId } = req.params; // Get classId from request parameters
+
+    const students = await prisma.student.findMany({
+      where: { classId: parseInt(classId) }, // Ensure classId is an integer if it's a number
+    });
+
+    res.status(200).json({ students });
+  } catch (error) {
+    console.error("Error fetching students:", error);
+    res.status(500).json({ message: "Server error while fetching students" });
   }
 };
 

@@ -1,48 +1,51 @@
-// import { Router } from "express";
-// import { authenticate } from "../middlewares/authaniticator";
-// import {
-//   AcademicYear,
-//   CreateExamType,
-//   CreateSubjects,
-//   GetExamType,
-//   RegisterScore,
-// } from "../controller/exam.controller";
-
-// const router = Router();
-
-// router.post("/create", authenticate, CreateExamType);
-// router.post("/RegisterScore", authenticate, RegisterScore);
-// router.post("/createsubject", authenticate, CreateSubjects);
-// router.post("/createAcadmic", AcademicYear);
-// router.get("/list", GetExamType);
-
-// export default router;
 import { Router } from "express";
 import { authenticate } from "../middlewares/authaniticator";
 import {
-  AcademicYear,
+  // Exam Type
   CreateExamType,
-  CreateSubjects,
-  getExamReportByClass,
   GetExamType,
-  getFinalExamReportByClass,
-  getMidtermMonthlyReportByClass,
-  listStudentExams,
+
+  // Subjects & Scores
+  CreateSubjects,
   RegisterScore,
   registerTenSubjects,
+
+  // Academic Year
+  AcademicYear,
+
+  // Exam Reports
+  getExamReportByClass,
+  getFinalExamReportByClass,
+  getMidtermMonthlyReportByClass,
+  getYearlyProgressReportByStudent,
+  listStudentExams,
 } from "../controller/exam.controller";
 
 const router = Router();
 
+/* ──────────────── Exam Types ──────────────── */
 router.post("/create", authenticate, CreateExamType);
-router.post("/RegisterScore", authenticate, RegisterScore);
-router.post("/createsubject", authenticate, CreateSubjects);
-router.post("/createAcademic", authenticate, AcademicYear); // fixed typo + protected
 router.get("/list", GetExamType);
+
+/* ──────────────── Subject & Score Registration ──────────────── */
+router.post("/createsubject", authenticate, CreateSubjects);
+router.post("/RegisterScore", authenticate, RegisterScore);
 router.post("/registerTenSubjects", authenticate, registerTenSubjects);
+
+/* ──────────────── Academic Year ──────────────── */
+router.post("/createAcademic", authenticate, AcademicYear);
+
+/* ──────────────── Student Exam Info ──────────────── */
 router.get("/student/:id", listStudentExams);
+
+/* ──────────────── Reports ──────────────── */
 router.post("/exam-report", getExamReportByClass);
 router.post("/final-exam-report", getFinalExamReportByClass);
 router.post("/report/midterm-monthly", getMidtermMonthlyReportByClass);
+router.post(
+  "/yearly-progress-report",
+  authenticate,
+  getYearlyProgressReportByStudent
+);
 
 export default router;
