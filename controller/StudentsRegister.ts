@@ -150,6 +150,92 @@ export const createMultipleStudents = async (req: Request, res: Response) => {
   }
 };
 
+// export const createMultipleStudentsByExcel = async (
+//   req: Request,
+//   res: Response
+// ) => {
+//   try {
+//     // @ts-ignore
+//     const user = req.user;
+
+//     if (!req.file) {
+//       return res.status(400).json({ message: "No file uploaded" });
+//     }
+
+//     const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
+//     const sheetName = workbook.SheetNames[0];
+//     const worksheet = workbook.Sheets[sheetName];
+//     const studentsData = XLSX.utils.sheet_to_json(worksheet);
+
+//     if (!Array.isArray(studentsData) || studentsData.length === 0) {
+//       return res
+//         .status(400)
+//         .json({ message: "Excel file is empty or invalid" });
+//     }
+
+//     const createdStudents = [];
+
+//     for (const row of studentsData) {
+//       const {
+//         firstname,
+//         middlename,
+//         lastname,
+//         classId,
+//         phone,
+//         gender,
+//         Age,
+//         fee,
+//         phone2,
+//         bus,
+//         address,
+//         previousSchool,
+//         motherName,
+//       } = row as any;
+
+//       const phoneStr = String(phone);
+//       const busStr = bus ? String(bus) : null; // ✅ Ensure bus is string
+
+//       const checkStudent = await prisma.student.findFirst({
+//         where: { phone: phoneStr },
+//       });
+
+//       if (checkStudent) continue;
+
+//       const fullname = `${firstname} ${middlename || ""} ${lastname}`.trim();
+
+//       const newStudent = await prisma.student.create({
+//         data: {
+//           firstname,
+//           middlename,
+//           lastname,
+//           fullname,
+//           classId: +classId,
+//           phone: phoneStr,
+//           gender,
+//           Age: +Age,
+//           fee,
+//           phone2: phone2 ? String(phone2) : null,
+//           bus: busStr, // ✅ bus is string
+//           address,
+//           previousSchool,
+//           motherName,
+//           userid: user.useId, // Double-check this field name
+//         },
+//       });
+
+//       createdStudents.push(newStudent);
+//     }
+
+//     res.status(201).json({
+//       message: `${createdStudents.length} students uploaded successfully.`,
+//       students: createdStudents,
+//     });
+//   } catch (error) {
+//     console.error("Error uploading students via Excel:", error);
+//     res.status(500).json({ message: "Server error while uploading students" });
+//   }
+// };
+
 export const createMultipleStudentsByExcel = async (
   req: Request,
   res: Response
@@ -162,7 +248,7 @@ export const createMultipleStudentsByExcel = async (
       return res.status(400).json({ message: "No file uploaded" });
     }
 
-    const workbook = XLSX.read(req.file.buffer, { type: "buffer" }); // 🔥 FIX HERE
+    const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
     const sheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[sheetName];
     const studentsData = XLSX.utils.sheet_to_json(worksheet);
@@ -173,14 +259,99 @@ export const createMultipleStudentsByExcel = async (
         .json({ message: "Excel file is empty or invalid" });
     }
 
-    // Rest of your code ...
+    const createdStudents = [];
+    const skippedStudents: { row: number; reason: string }[] = [];
+
+    for (let i = 0; i < studentsData.length; i++) {
+      const row = studentsData[i];
+      const {
+        firstname,
+        middlename,
+        lastname,
+        classId,
+        phone,
+        gender,
+        Age,
+        fee,
+        phone2,
+        bus,
+        address,
+        previousSchool,
+        motherName,
+      } = row as any;
+
+      const rowIndex = i + 2; // Excel row number (header = row 1)
+
+      // Validate essential fields
+      if (!firstname || !lastname || !classId || !phone) {
+        skippedStudents.push({
+          row: rowIndex,
+          reason:
+            "Missing required fields (firstname, lastname, phone, classId)",
+        });
+        continue;
+      }
+
+      const phoneStr = String(phone);
+      const busStr = bus ? String(bus) : null;
+
+      // Check for duplicate phone
+      const existing = await prisma.student.findFirst({
+        where: { phone: phoneStr },
+      });
+
+      if (existing) {
+        skippedStudents.push({
+          row: rowIndex,
+          reason: "Duplicate phone number",
+        });
+        continue;
+      }
+
+      const fullname = `${firstname} ${middlename || ""} ${lastname}`.trim();
+
+      try {
+        const newStudent = await prisma.student.create({
+          data: {
+            firstname,
+            middlename,
+            lastname,
+            fullname,
+            classId: +classId,
+            phone: phoneStr,
+            gender,
+            Age: Age ? +Age : 0, // ✅ fallback to 0 if missing
+            fee,
+            phone2: phone2 ? String(phone2) : null,
+            bus: busStr, // ✅ bus is string
+            address,
+            previousSchool,
+            motherName,
+            userid: user.useId, // ✅ ensure useId is correct
+          },
+        });
+
+        createdStudents.push(newStudent);
+      } catch (err) {
+        skippedStudents.push({
+          row: rowIndex,
+          reason: "Database error during insertion",
+        });
+      }
+    }
+
+    res.status(201).json({
+      message: `${createdStudents.length} students uploaded.`,
+      created: createdStudents.length,
+      skipped: skippedStudents.length,
+      skippedDetails: skippedStudents,
+    });
   } catch (error) {
-    console.error("Error creating students:", error);
-    res.status(500).json({ message: "Server error while creating students" });
+    console.error("Upload Error:", error);
+    res.status(500).json({ message: "Server error while uploading students" });
   }
 };
 
-// Get All Students
 export const getStudents = async (req: Request, res: Response) => {
   try {
     const students = await prisma.student.findMany({
@@ -837,6 +1008,82 @@ export const updateStudentAttendance = async (req: Request, res: Response) => {
   }
 };
 
+export const getAbsentStudentsByDate = async (req: Request, res: Response) => {
+  try {
+    const { date } = req.query;
+
+    if (!date) {
+      return res
+        .status(400)
+        .json({ message: "Date is required as a query parameter" });
+    }
+
+    const inputDate = new Date(date as string);
+    if (isNaN(inputDate.getTime())) {
+      return res.status(400).json({ message: "Invalid date format" });
+    }
+
+    // Convert to UTC range: [00:00, 23:59] of the selected day
+    const startOfDay = new Date(
+      Date.UTC(
+        inputDate.getUTCFullYear(),
+        inputDate.getUTCMonth(),
+        inputDate.getUTCDate()
+      )
+    );
+    const endOfDay = new Date(
+      Date.UTC(
+        inputDate.getUTCFullYear(),
+        inputDate.getUTCMonth(),
+        inputDate.getUTCDate() + 1
+      )
+    );
+
+    // Get all absent records on that date
+    const absentRecords = await prisma.attendance.findMany({
+      where: {
+        present: false,
+        date: {
+          gte: startOfDay,
+          lt: endOfDay,
+        },
+      },
+      include: {
+        student: {
+          select: {
+            id: true,
+            fullname: true,
+            classId: true,
+          },
+        },
+      },
+      orderBy: {
+        date: "asc",
+      },
+    });
+
+    const formatted = absentRecords.map((record) => ({
+      studentId: record.student.id,
+      fullname: record.student.fullname,
+      classId: record.student.classId,
+      remark: record.remark,
+      date: record.date.toISOString().split("T")[0],
+    }));
+
+    res.status(200).json({
+      success: true,
+      date: startOfDay.toISOString().split("T")[0],
+      absentStudents: formatted,
+    });
+  } catch (error) {
+    console.error("Error fetching absent students by date:", error);
+    res.status(500).json({
+      message: "Failed to retrieve absent students",
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+};
+
 export const markAbsenteesBulk = async (req: Request, res: Response) => {
   try {
     const { studentIds, date } = req.body;
@@ -1088,5 +1335,42 @@ export const deleteAttendance = async (req: Request, res: Response) => {
     res.status(500).json({ message: "Server error while deleting attendance" });
   }
 };
+
+// Permanently delete multiple students by ID range
+export const deleteMultipleStudentsPermanently = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const { startId, endId } = req.body;
+
+    if (!startId || !endId || isNaN(startId) || isNaN(endId)) {
+      return res.status(400).json({
+        message: "startId and endId are required and must be valid numbers",
+      });
+    }
+
+    const deleted = await prisma.student.deleteMany({
+      where: {
+        id: {
+          gte: Number(startId),
+          lte: Number(endId),
+        },
+      },
+    });
+
+    res.status(200).json({
+      message: `Students from ID ${startId} to ${endId} permanently deleted.`,
+      count: deleted.count,
+    });
+  } catch (error) {
+    console.error("Error permanently deleting students:", error);
+    res.status(500).json({
+      message: "Server error while permanently deleting students",
+    });
+  }
+};
+
+
 
 export { upload };

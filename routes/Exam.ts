@@ -19,6 +19,13 @@ import {
   getMidtermMonthlyReportByClass,
   getYearlyProgressReportByStudent,
   listStudentExams,
+  upgradeAllStudents,
+  upgradeStudentClass,
+  getTotalScoreByAcademicYear,
+  updateExamScore,
+  deleteExamScore,
+  updateTenSubjects,
+  getStudentExamScores,
 } from "../controller/exam.controller";
 
 const router = Router();
@@ -36,7 +43,16 @@ router.post("/registerTenSubjects", authenticate, registerTenSubjects);
 router.post("/createAcademic", authenticate, AcademicYear);
 
 /* ──────────────── Student Exam Info ──────────────── */
-router.get("/student/:id", listStudentExams);
+router.get("/student/:studentId/year/:academicYearId", listStudentExams);
+
+router.put("/score/update", updateExamScore);
+router.delete("/score/delete", deleteExamScore);
+router.post("/update-ten-subjects", updateTenSubjects);
+// exam.routes.ts
+router.get(
+  "/student/:studentId/exam/:examId/year/:academicYearId",
+  getStudentExamScores
+);
 
 /* ──────────────── Reports ──────────────── */
 router.post("/exam-report", getExamReportByClass);
@@ -47,5 +63,9 @@ router.post(
   authenticate,
   getYearlyProgressReportByStudent
 );
+
+router.put("/students/upgrade/:id", upgradeStudentClass);
+router.put("/students/upgrade-all", upgradeAllStudents);
+router.get("/students/:id/total-score", getTotalScoreByAcademicYear);
 
 export default router;

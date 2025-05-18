@@ -77,23 +77,12 @@ export const CreateSubjects = async (req: Request, res: Response) => {
     res.status(500).json({ message: "Internal server error" });
   }
 };
-
 export const RegisterScore = async (req: Request, res: Response) => {
   try {
     const { studentId, examId, subjectId, marks, academicYearId } = req.body;
 
     if (!studentId || !examId || !subjectId || marks === undefined) {
       return res.status(400).json({ message: "All fields are required" });
-    }
-
-    const existingScore = await prisma.score.findFirst({
-      where: { studentId, examId, subjectId },
-    });
-
-    if (existingScore) {
-      return res
-        .status(400)
-        .json({ message: "Score already exists for this exam and subject." });
     }
 
     const exam = await prisma.exam.findUnique({
@@ -104,7 +93,31 @@ export const RegisterScore = async (req: Request, res: Response) => {
       return res.status(404).json({ message: "Exam not found." });
     }
 
-    // Validate marks according to Exam type
+    // ✅ Use provided academicYearId or fallback to exam.academicYearId
+    const resolvedAcademicYearId = academicYearId || exam.academicYearId;
+
+    if (!resolvedAcademicYearId) {
+      return res.status(400).json({ message: "Academic Year ID is missing." });
+    }
+
+    // ✅ Prevent duplicate score only if academic year also matches
+    const existingScore = await prisma.score.findFirst({
+      where: {
+        studentId,
+        examId,
+        subjectId,
+        academicYearId: resolvedAcademicYearId,
+      },
+    });
+
+    if (existingScore) {
+      return res.status(400).json({
+        message:
+          "Score already exists for this exam, subject, and academic year.",
+      });
+    }
+
+    // ✅ Validate marks based on exam type
     if (marks > exam.maxMarks) {
       return res.status(400).json({
         message: `Marks cannot be greater than maximum allowed (${exam.maxMarks}) for this exam.`,
@@ -130,12 +143,6 @@ export const RegisterScore = async (req: Request, res: Response) => {
     //@ts-ignore
     const user = req.user;
 
-    const resolvedAcademicYearId = academicYearId || exam.academicYearId;
-
-    if (!resolvedAcademicYearId) {
-      return res.status(400).json({ message: "Academic Year ID is missing." });
-    }
-
     const createScore = await prisma.score.create({
       data: {
         studentId,
@@ -143,7 +150,7 @@ export const RegisterScore = async (req: Request, res: Response) => {
         subjectId,
         marks,
         userid: user.useId,
-        academicYearId: resolvedAcademicYearId, // ✅ resolved from body or exam
+        academicYearId: resolvedAcademicYearId,
       },
     });
 
@@ -190,6 +197,7 @@ export const registerTenSubjects = async (req: Request, res: Response) => {
       return res.status(404).json({ message: "Exam not found." });
     }
 
+    // ✅ Check marks based on exam type
     for (const { subjectId, marks } of scores) {
       if (marks > exam.maxMarks) {
         return res.status(400).json({
@@ -216,21 +224,25 @@ export const registerTenSubjects = async (req: Request, res: Response) => {
     //@ts-ignore
     const user = req.user;
 
+    // ✅ Check for duplicates within the same academic year
     for (const { subjectId } of scores) {
       const existingScore = await prisma.score.findFirst({
         where: {
           studentId,
           examId,
           subjectId,
+          academicYearId, // ✅ only blocks if same academic year
         },
       });
+
       if (existingScore) {
         return res.status(400).json({
-          message: `Score for subject ID ${subjectId} already exists for this student and exam.`,
+          message: `Score for subject ID ${subjectId} already exists for this student, exam, and academic year.`,
         });
       }
     }
 
+    // ✅ Save all 10 scores
     const createdScores = await Promise.all(
       scores.map(({ subjectId, marks }) =>
         prisma.score.create({
@@ -256,7 +268,6 @@ export const registerTenSubjects = async (req: Request, res: Response) => {
   }
 };
 
-// Create Academic Year
 export const AcademicYear = async (req: Request, res: Response) => {
   try {
     const { year } = req.body;
@@ -286,10 +297,18 @@ export const AcademicYear = async (req: Request, res: Response) => {
 
 export const listStudentExams = async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const studentId = Number(req.params.studentId);
+    const academicYearId = Number(req.params.academicYearId);
 
+    if (!studentId || !academicYearId) {
+      return res
+        .status(400)
+        .json({ message: "Student ID and Academic Year ID are required." });
+    }
+
+    // Fetch student
     const student = await prisma.student.findUnique({
-      where: { id: Number(id) },
+      where: { id: studentId },
       select: {
         id: true,
         fullname: true,
@@ -301,45 +320,77 @@ export const listStudentExams = async (req: Request, res: Response) => {
       return res.status(404).json({ message: "Student not found" });
     }
 
-    const exams = await prisma.exam.findMany({
+    // Fetch academic year name
+    const academicYear = await prisma.academicYear.findUnique({
+      where: { id: academicYearId },
+    });
+
+    if (!academicYear) {
+      return res.status(404).json({ message: "Academic Year not found" });
+    }
+
+    // Get scores filtered by academic year
+    const scores = await prisma.score.findMany({
       where: {
-        scores: { some: { studentId: Number(id) } },
+        studentId,
+        academicYearId,
       },
       select: {
-        id: true,
-        name: true,
-        scores: {
-          where: { studentId: Number(id) },
+        marks: true,
+        subject: { select: { name: true } },
+        exam: {
           select: {
-            marks: true,
-            subject: { select: { name: true } },
+            id: true,
+            name: true,
           },
         },
       },
     });
 
+    // Group scores by exam
+    const examMap: Record<
+      number,
+      {
+        examId: number;
+        examName: string;
+        subjectScores: { subjectName: string; marks: number }[];
+      }
+    > = {};
+
+    for (const score of scores) {
+      const examId = score.exam.id;
+      if (!examMap[examId]) {
+        examMap[examId] = {
+          examId,
+          examName: score.exam.name,
+          subjectScores: [],
+        };
+      }
+
+      examMap[examId].subjectScores.push({
+        subjectName: score.subject.name,
+        marks: score.marks,
+      });
+    }
+
+    // Return final result
     const result = {
       student: {
         id: student.id,
         fullName: student.fullname,
         class: student.classes?.name || "No Class",
       },
-      exams: exams.map((exam) => ({
-        examId: exam.id,
-        examName: exam.name,
-        subjectScores: exam.scores.map((s) => ({
-          subjectName: s.subject.name,
-          marks: s.marks,
-        })),
-      })),
+      academicYear: academicYear.year, // ✅ include year name like "2024-2025"
+      exams: Object.values(examMap),
     };
 
     res.status(200).json(result);
   } catch (error) {
-    console.error(error);
+    console.error("Error in listStudentExams:", error);
     res.status(500).json({ message: "Internal server error" });
   }
 };
+
 export const getExamReportByClass = async (req: Request, res: Response) => {
   try {
     const { classId, examId } = req.body;
@@ -676,6 +727,515 @@ export const getYearlyProgressReportByStudent = async (
     });
   } catch (error) {
     console.error("Error generating yearly progress report:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+//Upgrade student Class after final exam passed.
+
+export const upgradeAllStudents = async (req: Request, res: Response) => {
+  const { year } = req.query;
+
+  if (!year) {
+    return res
+      .status(400)
+      .json({ message: "Missing academic year (e.g. ?year=2024-2025)" });
+  }
+
+  try {
+    // 1. Find the academic year ID
+    const academicYear = await prisma.academicYear.findUnique({
+      where: { year: year as string },
+    });
+
+    if (!academicYear) {
+      return res
+        .status(404)
+        .json({ message: `Academic year "${year}" not found.` });
+    }
+
+    // 2. Get total scores for all students in that academic year
+    const scores = await prisma.score.groupBy({
+      by: ["studentId"],
+      where: {
+        academicYearId: academicYear.id,
+      },
+      _sum: {
+        marks: true,
+      },
+    });
+
+    const upgradedStudents = [];
+
+    for (const score of scores) {
+      const studentId = score.studentId;
+      const totalMarks = score._sum.marks ?? 0;
+
+      if (totalMarks < 500) continue;
+
+      const student = await prisma.student.findUnique({
+        where: { id: studentId },
+        include: { classes: true },
+      });
+
+      if (!student || !student.classes) continue;
+
+      const currentClassName = student.classes.name;
+      const match = currentClassName.match(/^(\d+)([A-Za-z]+)$/);
+
+      if (!match) continue;
+
+      const currentNumber = parseInt(match[1]);
+      const letter = match[2];
+      const nextClassName = `${currentNumber + 1}${letter}`;
+
+      const nextClass = await prisma.classes.findFirst({
+        where: { name: nextClassName },
+      });
+
+      if (!nextClass) continue;
+
+      const updatedStudent = await prisma.student.update({
+        where: { id: studentId },
+        data: {
+          classId: nextClass.id,
+        },
+        include: { classes: true },
+      });
+
+      upgradedStudents.push({
+        id: updatedStudent.id,
+        firstname: updatedStudent.firstname,
+        newClass: updatedStudent.classes.name,
+      });
+    }
+
+    return res.json({
+      academicYear: year,
+      upgradedCount: upgradedStudents.length,
+      students: upgradedStudents,
+    });
+  } catch (error) {
+    console.error("Upgrade error:", error);
+    return res.status(500).json({ message: "Server error", error });
+  }
+};
+
+export const upgradeStudentClass = async (req: Request, res: Response) => {
+  const studentId = parseInt(req.params.id);
+
+  try {
+    const totalScore = await prisma.score.aggregate({
+      _sum: {
+        marks: true,
+      },
+      where: {
+        studentId: studentId,
+      },
+    });
+
+    const total = totalScore._sum.marks ?? 0;
+
+    if (total < 500) {
+      return res.status(200).json({
+        message: "Student score is less than 500. No upgrade applied.",
+      });
+    }
+
+    const student = await prisma.student.findUnique({
+      where: { id: studentId },
+      include: { classes: true },
+    });
+
+    if (!student || !student.classes) {
+      return res.status(404).json({ message: "Student or class not found." });
+    }
+
+    const currentClassName = student.classes.name;
+    const match = currentClassName.match(/^(\d+)([A-Za-z]+)$/);
+
+    if (!match) {
+      return res.status(400).json({ message: "Invalid class name format." });
+    }
+
+    const currentNumber = parseInt(match[1]);
+    const letter = match[2];
+    const nextClassName = `${currentNumber + 1}${letter}`;
+
+    const nextClass = await prisma.classes.findFirst({
+      where: { name: nextClassName },
+    });
+
+    if (!nextClass) {
+      return res
+        .status(404)
+        .json({ message: `Next class (${nextClassName}) not found.` });
+    }
+
+    const updatedStudent = await prisma.student.update({
+      where: { id: studentId },
+      data: {
+        classId: nextClass.id,
+      },
+      include: { classes: true },
+    });
+
+    return res.json({
+      id: updatedStudent.id,
+      firstname: updatedStudent.firstname,
+      newClass: updatedStudent.classes.name,
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: "Server error", error });
+  }
+};
+// src/controllers/score.controller.ts
+
+export const getTotalScoreByAcademicYear = async (
+  req: Request,
+  res: Response
+) => {
+  const studentId = parseInt(req.params.id);
+  const academicYear = req.query.year as string;
+
+  if (!academicYear) {
+    return res
+      .status(400)
+      .json({ message: "Missing academic year (e.g., 2024-2025)" });
+  }
+
+  try {
+    // Find academic year ID
+    const year = await prisma.academicYear.findUnique({
+      where: { year: academicYear },
+    });
+
+    if (!year) {
+      return res
+        .status(404)
+        .json({ message: `Academic year ${academicYear} not found.` });
+    }
+
+    // Sum scores for all exam types (monthly + midterm + final)
+    const total = await prisma.score.aggregate({
+      where: {
+        studentId,
+        academicYearId: year.id,
+      },
+      _sum: {
+        marks: true,
+      },
+    });
+
+    return res.json({
+      studentId,
+      academicYear,
+      totalMarks: total._sum.marks ?? 0,
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: "Server error", error });
+  }
+};
+
+// Update an existing score
+
+export const updateExamScore = async (req: Request, res: Response) => {
+  try {
+    const { studentId, examId, subjectId, marks, academicYearId } = req.body;
+
+    if (
+      !studentId ||
+      !examId ||
+      !subjectId ||
+      marks === undefined ||
+      !academicYearId
+    ) {
+      return res.status(400).json({ message: "All fields are required" });
+    }
+
+    const exam = await prisma.exam.findUnique({ where: { id: examId } });
+    if (!exam) {
+      return res.status(404).json({ message: "Exam not found" });
+    }
+
+    if (marks > exam.maxMarks) {
+      return res.status(400).json({
+        message: `Marks cannot exceed ${exam.maxMarks} for this exam.`,
+      });
+    }
+
+    const existingScore = await prisma.score.findFirst({
+      where: { studentId, examId, subjectId },
+    });
+
+    if (existingScore) {
+      const updatedScore = await prisma.score.update({
+        where: { id: existingScore.id },
+        data: { marks },
+      });
+
+      return res.status(200).json({
+        message: "Score updated successfully",
+        score: updatedScore,
+      });
+    } else {
+      const createdScore = await prisma.score.create({
+        data: {
+          studentId,
+          examId,
+          subjectId,
+          marks,
+          academicYearId,
+          // Optional: if using authentication middleware
+          //@ts-ignore
+          userid: req.user?.useId || 1,
+        },
+      });
+
+      return res.status(201).json({
+        message: "Score created successfully",
+        score: createdScore,
+      });
+    }
+  } catch (error) {
+    console.error("Error in updateExamScore:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+// Delete a score record
+export const deleteExamScore = async (req: Request, res: Response) => {
+  try {
+    const { studentId, examId, subjectId } = req.body;
+
+    if (!studentId || !examId || !subjectId) {
+      return res
+        .status(400)
+        .json({ message: "studentId, examId, and subjectId are required" });
+    }
+
+    const score = await prisma.score.findFirst({
+      where: { studentId, examId, subjectId },
+    });
+
+    if (!score) {
+      return res.status(404).json({ message: "Score not found" });
+    }
+
+    await prisma.score.delete({ where: { id: score.id } });
+
+    res.status(200).json({ message: "Score deleted successfully" });
+  } catch (error) {
+    console.error("Error deleting score:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+// export const updateTenSubjects = async (req: Request, res: Response) => {
+//   try {
+//     const { studentId, examId, academicYearId, scores } = req.body;
+
+//     if (!studentId || !examId || !academicYearId || !Array.isArray(scores)) {
+//       return res.status(400).json({ message: "Invalid payload" });
+//     }
+
+//     const exam = await prisma.exam.findUnique({ where: { id: examId } });
+
+//     if (!exam) {
+//       return res.status(404).json({ message: "Exam not found" });
+//     }
+
+//     const updatedResults = [];
+
+//     for (const score of scores) {
+//       const { subjectId, marks } = score;
+
+//       if (marks > exam.maxMarks) {
+//         return res.status(400).json({
+//           message: `Marks for subject ${subjectId} cannot exceed ${exam.maxMarks}`,
+//         });
+//       }
+
+//       const existing = await prisma.score.findFirst({
+//         where: { studentId, examId, subjectId },
+//       });
+
+//       if (existing) {
+//         const updated = await prisma.score.update({
+//           where: { id: existing.id },
+//           data: { marks },
+//         });
+//         updatedResults.push(updated);
+//       } else {
+//         const created = await prisma.score.create({
+//           data: {
+//             studentId,
+//             examId,
+//             subjectId,
+//             marks,
+//             academicYearId,
+//             // optional if you have auth
+//             //@ts-ignore
+//             userid: req.user?.useId || 1,
+//           },
+//         });
+//         updatedResults.push(created);
+//       }
+//     }
+
+//     res.status(200).json({
+//       message: "Scores updated/created successfully",
+//       scores: updatedResults,
+//     });
+//   } catch (error) {
+//     console.error("Error updating scores:", error);
+//     res.status(500).json({ message: "Internal server error" });
+//   }
+// };
+// controller/examController.ts or similar
+
+// export const getStudentExamScores = async (req: Request, res: Response) => {
+//   try {
+//     const studentId = parseInt(req.params.studentId);
+//     const examId = parseInt(req.params.examId);
+
+//     if (!studentId || !examId) {
+//       return res
+//         .status(400)
+//         .json({ message: "Student ID and Exam ID are required." });
+//     }
+
+//     const scores = await prisma.score.findMany({
+//       where: {
+//         studentId,
+//         examId,
+//       },
+//       include: {
+//         subject: true, // include subject name
+//       },
+//     });
+
+//     if (!scores || scores.length === 0) {
+//       return res
+//         .status(404)
+//         .json({ message: "No scores found for this student and exam." });
+//     }
+
+//     const formatted = scores.map((score) => ({
+//       subjectId: score.subjectId,
+//       subjectName: score.subject.name,
+//       marks: score.marks,
+//     }));
+
+//     res.status(200).json({ scores: formatted });
+//   } catch (err) {
+//     console.error("Error fetching student exam scores:", err);
+//     res.status(500).json({ message: "Internal server error" });
+//   }
+// };
+
+export const updateTenSubjects = async (req: Request, res: Response) => {
+  try {
+    const { studentId, examId, academicYearId, scores } = req.body;
+
+    if (!studentId || !examId || !academicYearId || !Array.isArray(scores)) {
+      return res.status(400).json({ message: "Invalid payload" });
+    }
+
+    const exam = await prisma.exam.findUnique({ where: { id: examId } });
+
+    if (!exam) {
+      return res.status(404).json({ message: "Exam not found" });
+    }
+
+    const updatedResults = [];
+
+    for (const score of scores) {
+      const { subjectId, marks } = score;
+
+      if (marks > exam.maxMarks) {
+        return res.status(400).json({
+          message: `Marks for subject ${subjectId} cannot exceed ${exam.maxMarks}`,
+        });
+      }
+
+      const existing = await prisma.score.findFirst({
+        where: { studentId, examId, subjectId, academicYearId },
+      });
+
+      if (existing) {
+        const updated = await prisma.score.update({
+          where: { id: existing.id },
+          data: { marks },
+        });
+        updatedResults.push(updated);
+      } else {
+        const created = await prisma.score.create({
+          data: {
+            studentId,
+            examId,
+            subjectId,
+            marks,
+            academicYearId,
+            // optional if you have auth
+            //@ts-ignore
+            userid: req.user?.useId || 1,
+          },
+        });
+        updatedResults.push(created);
+      }
+    }
+
+    res.status(200).json({
+      message: "Scores updated/created successfully",
+      scores: updatedResults,
+    });
+  } catch (error) {
+    console.error("Error updating scores:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+export const getStudentExamScores = async (req: Request, res: Response) => {
+  try {
+    const studentId = parseInt(req.params.studentId);
+    const examId = parseInt(req.params.examId);
+    const academicYearId = parseInt(req.params.academicYearId);
+
+    if (!studentId || !examId || !academicYearId) {
+      return res.status(400).json({
+        message: "Student ID, Exam ID, and Academic Year ID are required.",
+      });
+    }
+
+    const scores = await prisma.score.findMany({
+      where: {
+        studentId,
+        examId,
+        academicYearId,
+      },
+      include: {
+        subject: true,
+      },
+    });
+
+    if (!scores || scores.length === 0) {
+      return res.status(404).json({
+        message: "No scores found for this student, exam, and academic year.",
+      });
+    }
+
+    const formatted = scores.map((score) => ({
+      subjectId: score.subjectId,
+      subjectName: score.subject.name,
+      marks: score.marks,
+    }));
+
+    res.status(200).json({ scores: formatted });
+  } catch (err) {
+    console.error("Error fetching student exam scores:", err);
     res.status(500).json({ message: "Internal server error" });
   }
 };

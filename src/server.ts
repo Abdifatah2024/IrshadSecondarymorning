@@ -7,6 +7,7 @@ import noteRouter from "../routes/note";
 import studentRouter from "../routes/StudentReg";
 import examtypeRouter from "../routes/Exam";
 import Dicipline from "../routes/disciplineroutes";
+import FeeRouter from "../routes/studentFeeRoutes";
 import cors from "cors";
 // import morgan from "morgan";
 const app = express();
@@ -35,6 +36,7 @@ app.use("/Note", noteRouter);
 app.use("/student", studentRouter);
 app.use("/exam", examtypeRouter);
 app.use("/Dicipline", Dicipline);
+app.use("/fee", FeeRouter);
 
 // Fix 3: Add error handling middleware
 app.use(
@@ -48,6 +50,7 @@ app.use(
     res.status(500).send("Something broke!");
   }
 );
+
 // In your Express backend (usually in app.js or server.js)
 app.use(
   "/uploads",
@@ -58,6 +61,7 @@ app.use(
     },
   })
 );
+app.use("/uploads", express.static("uploads"));
 
 app.listen(port, () => {
   console.log(`Server running on port ${port}`); // Should now show actual port

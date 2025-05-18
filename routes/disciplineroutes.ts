@@ -7,6 +7,7 @@ import {
   deleteDiscipline,
   getDisciplineByStudentId,
   addDisciplineComment,
+  getMinimalStudentList,
 } from "../controller/discipline.controller";
 import { authenticate } from "../middlewares/authaniticator";
 
@@ -26,5 +27,6 @@ router.get("/discipline/:id", getDisciplineByStudentId); // generic ID
 /* -------------------------- Update & Delete -------------------------- */
 router.put("/discipline/:id", updateDiscipline);
 router.delete("/discipline/:id", deleteDiscipline);
+router.get("/students/minimal", getMinimalStudentList);
 
 export default router;

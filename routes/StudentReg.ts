@@ -28,6 +28,8 @@ import {
   getAttendance,
   getAllAbsenteesByDate,
   getTopAbsentStudents,
+  getAbsentStudentsByDate,
+  deleteMultipleStudentsPermanently,
 } from "../controller/StudentsRegister";
 
 import { getYearlyProgressReportByStudent } from "../controller/exam.controller";
@@ -35,12 +37,21 @@ import { getYearlyProgressReportByStudent } from "../controller/exam.controller"
 const router = Router();
 
 /* ----------------------------- Student CRUD ----------------------------- */
-router.post("/create", authenticate, authorize("ADMIN"), createStudent);
+router.post("/create", authenticate, createStudent);
 router.post("/createMultiple", authenticate, createMultipleStudents);
-router.post("/upload", upload.single("file"), createMultipleStudentsByExcel);
+router.post(
+  "/upload-excel",
+  upload.single("file"),
+  authenticate,
+  createMultipleStudentsByExcel
+);
 router.put("/updateClass", authenticate, updateStudentClass);
 router.put("/updateClass", authenticate, updateStudentClass);
 router.put("/:id", authenticate, updateStudent);
+router.post(
+  "/students/delete-range-permanent",
+  deleteMultipleStudentsPermanently
+);
 
 /* ----------------------------- Class Routes ----------------------------- */
 router.post("/createclass", authenticate, authorize("ADMIN"), createclass);
@@ -64,6 +75,7 @@ router.put("/updateAttednce", authenticate, updateAttendance);
 router.put("/updateattadence/:id", authenticate, updateAttendance);
 
 router.delete("/attendance", authenticate, deleteAttendance);
+router.get("/attendance/absent", getAbsentStudentsByDate);
 
 /* -------------------------- Soft Delete / Restore -------------------------- */
 router.get("/students/soft-deleted", listSoftDeletedStudents);
@@ -75,8 +87,9 @@ router.delete("/delete/:id", authenticate, deletepermitly);
 // router.get("/report/:studentId", getYearlyProgressReportByStudent);
 
 /* ------------------------ Dynamic Student Lookup ------------------------ */
-router.get("/:id", getStudentById);
+
 router.get("/:query", getStudentByIdOrName);
+router.get("/Get/:id", getStudentById);
 
 // /* --------------------- WhatsApp Notification (Future) --------------------- */
 // router.post("/notify-absence", async (req, res) => {

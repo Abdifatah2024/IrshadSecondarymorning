@@ -132,6 +132,7 @@ export const register = async (req: Request, res: Response) => {
 // ─────────────────────────────────────────────────────
 // Login User
 // ─────────────────────────────────────────────────────
+
 export const login = async (req: Request, res: Response) => {
   try {
     const { password, email } = req.body;
@@ -139,32 +140,111 @@ export const login = async (req: Request, res: Response) => {
     if (!password || !email) {
       return res
         .status(400)
-        .json({ message: "Username and password is required" });
+        .json({ message: "Email and password are required." });
     }
 
-    const checkUser = await prisma.user.findFirst({
+    const user = await prisma.user.findFirst({
       where: { email: email.toLowerCase() },
     });
 
-    if (!checkUser || !bcryptjs.compareSync(password, checkUser.password)) {
+    if (!user) {
       return res.status(401).json({ message: "Incorrect email or password." });
     }
+
+    // Determine current lock duration
+    const unlockAfterMs = user.lockCount === 0 ? 1 * 60 * 1000 : 5 * 60 * 1000; // 1 min or 5 min
+
+    // Auto-unlock if enough time has passed
+    if (user.isLocked && user.lockedAt) {
+      const now = new Date();
+      const lockedForMs = now.getTime() - new Date(user.lockedAt).getTime();
+
+      if (lockedForMs >= unlockAfterMs) {
+        await prisma.user.update({
+          where: { id: user.id },
+          data: {
+            isLocked: false,
+            lockedAt: null,
+            failedAttempts: 0,
+          },
+        });
+        user.isLocked = false;
+        user.failedAttempts = 0;
+      }
+    }
+
+    // Still locked?
+    if (user.isLocked) {
+      const remainingTimeMs =
+        unlockAfterMs - (Date.now() - new Date(user.lockedAt!).getTime());
+      const remainingSeconds = Math.ceil(remainingTimeMs / 1000);
+      return res.status(403).json({
+        message: `Account is temporarily locked. Try again in ${remainingSeconds} seconds.`,
+      });
+    }
+
+    const isPasswordValid = bcryptjs.compareSync(password, user.password);
+
+    if (!isPasswordValid) {
+      const updatedAttempts = user.failedAttempts + 1;
+      const attemptsLeft = 3 - updatedAttempts;
+
+      if (updatedAttempts >= 3) {
+        await prisma.user.update({
+          where: { id: user.id },
+          data: {
+            failedAttempts: updatedAttempts,
+            isLocked: true,
+            lockedAt: new Date(),
+            lockCount: user.lockCount + 1, // Increase lock count
+          },
+        });
+
+        const lockDuration = user.lockCount === 0 ? 1 : 5;
+        return res.status(403).json({
+          message: `Account locked after 3 failed attempts. Try again in ${lockDuration} minute${
+            lockDuration === 1 ? "" : "s"
+          }.`,
+        });
+      }
+
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { failedAttempts: updatedAttempts },
+      });
+
+      return res.status(401).json({
+        message: `Incorrect password. You have ${attemptsLeft} attempt${
+          attemptsLeft === 1 ? "" : "s"
+        } left.`,
+      });
+    }
+
+    // ✅ Successful login — reset everything
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        failedAttempts: 0,
+        isLocked: false,
+        lockedAt: null,
+        lockCount: 0,
+      },
+    });
 
     res.status(200).json({
       message: "Successfully logged in!",
       user: {
-        id: checkUser.id,
-        email: checkUser.email,
-        username: checkUser.username,
-        fullname: checkUser.fullName,
-        Role: checkUser.role,
+        id: user.id,
+        email: user.email,
+        username: user.username,
+        fullname: user.fullName,
+        Role: user.role,
       },
-      Access_token: genarateToken(checkUser),
+      Access_token: genarateToken(user),
     });
   } catch (error) {
-    return res
-      .status(500)
-      .json({ message: "Failed to login. Please contact support team." });
+    console.error("Login error:", error);
+    return res.status(500).json({ message: "Login failed. Please try again." });
   }
 };
 
