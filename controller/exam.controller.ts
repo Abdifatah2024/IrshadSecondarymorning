@@ -462,15 +462,116 @@ export const getExamReportByClass = async (req: Request, res: Response) => {
   }
 };
 
+// export const getFinalExamReportByClass = async (
+//   req: Request,
+//   res: Response
+// ) => {
+//   try {
+//     const { classId } = req.body;
+
+//     if (!classId) {
+//       return res.status(400).json({ message: "Class ID is required." });
+//     }
+
+//     // Get all students in the class
+//     const students = await prisma.student.findMany({
+//       where: { classId: Number(classId) },
+//       select: {
+//         id: true,
+//         fullname: true,
+//         Score: {
+//           select: {
+//             marks: true,
+//             subject: { select: { name: true } },
+//             exam: { select: { type: true } },
+//           },
+//         },
+//       },
+//     });
+
+//     if (!students.length) {
+//       return res
+//         .status(404)
+//         .json({ message: "No students found in this class." });
+//     }
+
+//     const studentReports = students.map((student) => {
+//       // Combine marks from all 3 exam types per subject
+//       const subjectMap: { [key: string]: number } = {};
+
+//       student.Score.forEach((score) => {
+//         const subjectName = score.subject.name;
+//         if (["MONTHLY", "MIDTERM", "FINAL"].includes(score.exam.type)) {
+//           subjectMap[subjectName] =
+//             (subjectMap[subjectName] || 0) + score.marks;
+//         }
+//       });
+
+//       const subjectScores = Object.entries(subjectMap).map(
+//         ([subject, marks]) => ({
+//           subject,
+//           marks,
+//         })
+//       );
+
+//       const totalMarks = subjectScores.reduce(
+//         (sum, subj) => sum + subj.marks,
+//         0
+//       );
+
+//       return {
+//         studentId: student.id,
+//         fullName: student.fullname,
+//         totalMarks,
+//         subjects: subjectScores,
+//       };
+//     });
+
+//     // Sort by total marks in descending order
+//     studentReports.sort((a, b) => b.totalMarks - a.totalMarks);
+
+//     // Assign ranks with handling for same marks
+//     let currentRank = 1;
+//     let lastTotalMarks: number | null = null;
+//     let rankOffset = 0;
+
+//     const rankedReport = studentReports.map((student, index) => {
+//       if (student.totalMarks === lastTotalMarks) {
+//         rankOffset++;
+//       } else {
+//         currentRank = index + 1;
+//         currentRank += rankOffset;
+//         rankOffset = 0;
+//         lastTotalMarks = student.totalMarks;
+//       }
+
+//       return {
+//         ...student,
+//         rank: currentRank,
+//       };
+//     });
+
+//     res.status(200).json({
+//       classId: Number(classId),
+//       report: rankedReport,
+//     });
+//   } catch (error) {
+//     console.error("Error fetching final exam report:", error);
+//     res.status(500).json({ message: "Internal server error" });
+//   }
+// };
+// Get Midterm Result.
 export const getFinalExamReportByClass = async (
   req: Request,
   res: Response
 ) => {
   try {
-    const { classId } = req.body;
+    const { classId, academicYearId } = req.body;
 
-    if (!classId) {
-      return res.status(400).json({ message: "Class ID is required." });
+    if (!classId || !academicYearId) {
+      return res
+        .status(400)
+        .json({ message: "Class ID and Academic Year ID are required." });
     }
 
     // Get all students in the class
@@ -480,6 +581,7 @@ export const getFinalExamReportByClass = async (
         id: true,
         fullname: true,
         Score: {
+          where: { academicYearId: Number(academicYearId) },
           select: {
             marks: true,
             subject: { select: { name: true } },
@@ -496,8 +598,7 @@ export const getFinalExamReportByClass = async (
     }
 
     const studentReports = students.map((student) => {
-      // Combine marks from all 3 exam types per subject
-      const subjectMap: { [key: string]: number } = {};
+      const subjectMap: Record<string, number> = {};
 
       student.Score.forEach((score) => {
         const subjectName = score.subject.name;
@@ -527,32 +628,31 @@ export const getFinalExamReportByClass = async (
       };
     });
 
-    // Sort by total marks in descending order
+    // Sort by total marks descending
     studentReports.sort((a, b) => b.totalMarks - a.totalMarks);
 
     // Assign ranks with handling for same marks
     let currentRank = 1;
-    let lastTotalMarks: number | null = null;
-    let rankOffset = 0;
+    let lastTotal: number | null = null;
+
+    let offset = 0;
 
     const rankedReport = studentReports.map((student, index) => {
-      if (student.totalMarks === lastTotalMarks) {
-        rankOffset++;
+      if (student.totalMarks === lastTotal) {
+        offset++;
       } else {
         currentRank = index + 1;
-        currentRank += rankOffset;
-        rankOffset = 0;
-        lastTotalMarks = student.totalMarks;
+        currentRank += offset;
+        offset = 0;
+        lastTotal = student.totalMarks;
       }
 
-      return {
-        ...student,
-        rank: currentRank,
-      };
+      return { ...student, rank: currentRank };
     });
 
     res.status(200).json({
       classId: Number(classId),
+      academicYearId: Number(academicYearId),
       report: rankedReport,
     });
   } catch (error) {
@@ -560,7 +660,7 @@ export const getFinalExamReportByClass = async (
     res.status(500).json({ message: "Internal server error" });
   }
 };
-// Get Midterm Result.
+
 export const getMidtermMonthlyReportByClass = async (
   req: Request,
   res: Response

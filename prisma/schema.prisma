@@ -23,29 +23,6 @@ enum StudentStatus {
   WARNING
 }
 
-// model User {
-//   id              Int          @id @default(autoincrement())
-//   fullName        String
-//   username        String       @unique
-//   email           String       @unique
-//   phoneNumber     String?      @unique
-//   password        String
-//   confirmpassword String // Hashed password
-//   createdAt       DateTime     @default(now())
-//   updatedAt       DateTime     @updatedAt
-//   photoUrl        String?      @default("Null")
-//   photoUpdatedAt  DateTime?
-//   emailVerified   Boolean?
-//   notes           note[]
-//   tasks           task[]
-//   classes         classes[]
-//   students        Student[]
-//   StudentFee      StudentFee[]
-//   Attendance      Attendance[]
-//   Score           Score[]
-//   role            Role         @default(USER)
-//   Discipline      Discipline[]
-// }
 model User {
   id              Int       @id @default(autoincrement())
   fullName        String
@@ -63,6 +40,8 @@ model User {
   isLocked        Boolean   @default(false)
   lockedAt        DateTime?
   lockCount       Int       @default(0)
+  correctionLimit Int       @default(10) // ✅ Now default is 10
+  correctionsUsed Int       @default(0)
 
   notes             note[]
   tasks             task[]
@@ -79,6 +58,8 @@ model User {
   resetTokenExpires DateTime? // token expiry time
   DisciplineComment DisciplineComment[]
   Payment           Payment[]
+  TeacherAssignment TeacherAssignment[]
+  TeacherClass      TeacherClass[]
 }
 
 model note {
@@ -103,11 +84,13 @@ model task {
 }
 
 model classes {
-  id      Int       @id @default(autoincrement())
-  name    String
-  userid  Int
-  user    User      @relation(fields: [userid], references: [id])
-  Student Student[]
+  id                Int                 @id @default(autoincrement())
+  name              String
+  userid            Int
+  user              User                @relation(fields: [userid], references: [id])
+  Student           Student[]
+  TeacherAssignment TeacherAssignment[]
+  TeacherClass      TeacherClass[]
 }
 
 model Student {
@@ -240,27 +223,33 @@ model Exam {
 }
 
 model Subject {
-  id             Int           @id @default(autoincrement())
-  name           String        @unique
-  scores         Score[]
-  AcademicYear   AcademicYear? @relation(fields: [academicYearId], references: [id])
-  academicYearId Int?
+  id                Int                 @id @default(autoincrement())
+  name              String              @unique
+  scores            Score[]
+  AcademicYear      AcademicYear?       @relation(fields: [academicYearId], references: [id])
+  academicYearId    Int?
+  TeacherAssignment TeacherAssignment[]
+  TeacherClass      TeacherClass[]
 }
 
 model Score {
-  id        Int     @id @default(autoincrement())
-  student   Student @relation(fields: [studentId], references: [id])
-  studentId Int
-  subject   Subject @relation(fields: [subjectId], references: [id])
-  subjectId Int
-  exam      Exam    @relation(fields: [examId], references: [id])
-  examId    Int
-  marks     Int
-  userid    Int
-
-  user           User          @relation(fields: [userid], references: [id])
-  AcademicYear   AcademicYear? @relation(fields: [academicYearId], references: [id])
-  academicYearId Int
+  id              Int           @id @default(autoincrement())
+  student         Student       @relation(fields: [studentId], references: [id])
+  studentId       Int
+  subject         Subject       @relation(fields: [subjectId], references: [id])
+  subjectId       Int
+  exam            Exam          @relation(fields: [examId], references: [id])
+  examId          Int
+  marks           Int
+  userid          Int
+  // ✅ New fields:
+  correctionCount Int           @default(0) // Number of updates allowed
+  correctionLimit Int           @default(10) // ✅ New: settable by admin
+  lastUpdatedAt   DateTime? // Optional: for audit
+  lastUpdatedBy   Int? // Optional: who made the last update
+  user            User          @relation(fields: [userid], references: [id])
+  AcademicYear    AcademicYear? @relation(fields: [academicYearId], references: [id])
+  academicYearId  Int
 }
 
 model AcademicYear {
@@ -326,4 +315,30 @@ model DisciplineComment {
   // Relations
   discipline Discipline @relation(fields: [disciplineId], references: [id])
   user       User       @relation(fields: [userId], references: [id])
+}
+
+model TeacherAssignment {
+  id        Int @id @default(autoincrement())
+  teacherId Int // links to User with role: Teacher
+  subjectId Int
+  classId   Int
+
+  teacher User    @relation(fields: [teacherId], references: [id])
+  subject Subject @relation(fields: [subjectId], references: [id])
+  class   classes @relation(fields: [classId], references: [id])
+
+  @@unique([teacherId, subjectId, classId]) // prevent duplicates
+}
+
+model TeacherClass {
+  id        Int @id @default(autoincrement())
+  teacherId Int // links to User with role: Teacher
+  classId   Int
+  subjectId Int // one subject only per teacher
+
+  teacher User    @relation(fields: [teacherId], references: [id])
+  class   classes @relation(fields: [classId], references: [id])
+  subject Subject @relation(fields: [subjectId], references: [id])
+
+  @@unique([teacherId, classId]) // avoid duplicate entries
 }

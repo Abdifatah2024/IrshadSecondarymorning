@@ -27,6 +27,18 @@ import {
   updateTenSubjects,
   getStudentExamScores,
 } from "../controller/exam.controller";
+import {
+  assignTeacherToClassSubject,
+  deleteTeacherAssignment,
+  getMyCorrectionLimit,
+  getTeacherAssignmentsById,
+  getTeacherCorrectionById,
+  registerTeacher,
+  setCorrectionLimit,
+  TeacherEnterScore,
+  updateStudentScore,
+  updateTeacherAssignment,
+} from "../controller/teacherScore.controller";
 
 const router = Router();
 
@@ -67,5 +79,32 @@ router.post(
 router.put("/students/upgrade/:id", upgradeStudentClass);
 router.put("/students/upgrade-all", upgradeAllStudents);
 router.get("/students/:id/total-score", getTotalScoreByAcademicYear);
+router.post("/teacher/score", authenticate, TeacherEnterScore);
+router.post("/register/teacher", registerTeacher);
+router.get(
+  "/teacher/:teacherId/assignments",
+  authenticate,
+  getTeacherAssignmentsById
+);
+
+router.post("/teacher/assignments", authenticate, assignTeacherToClassSubject); // routes/teacher.routes.ts
+router.put("/exam/teacher/assignments", authenticate, updateTeacherAssignment);
+router.delete(
+  "/teacher/assignment/:assignmentId",
+  authenticate,
+  deleteTeacherAssignment
+);
+router.put("/scores/update", authenticate, updateStudentScore);
+router.put(
+  "/admin/user/set-correction-limit",
+  authenticate,
+  setCorrectionLimit
+);
+router.get(
+  "/admin/teacher/:userId/correction-limit",
+  authenticate,
+  getTeacherCorrectionById
+);
+router.get("/me/correction-limit", authenticate, getMyCorrectionLimit);
 
 export default router;
