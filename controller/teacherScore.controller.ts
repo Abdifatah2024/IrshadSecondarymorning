@@ -525,13 +525,12 @@ export const updateStudentScore = async (req: Request, res: Response) => {
     const { studentId, subjectId, examId, academicYearId, newMarks } = req.body;
 
     // @ts-ignore
-    const userId = req.user?.useId; // ✅ fixed: was useId
+    const userId = req.user?.useId;
 
     if (!userId) {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
-    // ✅ Validate inputs
     if (
       !studentId ||
       !subjectId ||
@@ -546,7 +545,6 @@ export const updateStudentScore = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Score cannot be zero." });
     }
 
-    // ✅ Max marks per exam
     const examMaxMarks: Record<number, number> = {
       1: 20,
       2: 30,
@@ -560,7 +558,7 @@ export const updateStudentScore = async (req: Request, res: Response) => {
       });
     }
 
-    // ✅ Get the teacher's correction limit and used count
+    // ✅ Get teacher info
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: {
@@ -579,6 +577,31 @@ export const updateStudentScore = async (req: Request, res: Response) => {
     if (user.correctionsUsed >= user.correctionLimit) {
       return res.status(403).json({
         message: `You have reached your correction limit (${user.correctionLimit}).`,
+      });
+    }
+
+    // ✅ Get student class ID
+    const student = await prisma.student.findUnique({
+      where: { id: studentId },
+      select: { classId: true },
+    });
+
+    if (!student) {
+      return res.status(404).json({ message: "Student not found." });
+    }
+
+    // ✅ Check if teacher is assigned to this class + subject
+    const isAuthorized = await prisma.teacherClass.findFirst({
+      where: {
+        teacherId: userId,
+        subjectId,
+        classId: student.classId,
+      },
+    });
+
+    if (!isAuthorized) {
+      return res.status(403).json({
+        message: `You are not authorized to update score for subject ${subjectId} in class ${student.classId}.`,
       });
     }
 
@@ -606,7 +629,7 @@ export const updateStudentScore = async (req: Request, res: Response) => {
       },
     });
 
-    // ✅ Increment the teacher's correctionsUsed
+    // ✅ Increment correctionsUsed
     await prisma.user.update({
       where: { id: userId },
       data: {
@@ -741,5 +764,124 @@ export const getTeacherCorrectionById = async (req: Request, res: Response) => {
   } catch (error) {
     console.error("Error fetching teacher correction limit:", error);
     return res.status(500).json({ message: "Server error" });
+  }
+};
+
+// export const getTeacherDashboardData = async (req: Request, res: Response) => {
+//   try {
+//     // @ts-ignore
+//     const user = req.user?.useId;
+//     // @ts-ignore
+//     const userRole = req.user?.role;
+
+//     if (!user || userRole !== "Teacher") {
+//       return res
+//         .status(403)
+//         .json({
+//           message: "Access denied. Only teachers can access this route.",
+//         });
+//     }
+
+//     // ✅ Get assignments
+//     const assignments = await prisma.teacherClass.findMany({
+//       where: { teacherId: user.id },
+//       include: {
+//         class: { select: { id: true, name: true } },
+//         subject: { select: { id: true, name: true } },
+//       },
+//     });
+
+//     const formattedAssignments = assignments.map((a) => ({
+//       id: a.id,
+//       classId: a.class.id,
+//       className: a.class.name,
+//       subjectId: a.subject.id,
+//       subjectName: a.subject.name,
+//     }));
+
+//     // ✅ Get correction info
+//     const teacher = await prisma.user.findFirst({
+//       where: { id: user.id },
+//       select: {
+//         fullName: true,
+//         correctionLimit: true,
+//         correctionsUsed: true,
+//       },
+//     });
+
+//     if (!teacher) {
+//       return res.status(404).json({ message: "Teacher not found." });
+//     }
+
+//     // ✅ Return combined data
+//     return res.status(200).json({
+//       teacherId: user.id,
+//       teacherName: teacher.fullName,
+//       correctionLimit: teacher.correctionLimit,
+//       correctionsUsed: teacher.correctionsUsed,
+//       remainingCorrections: teacher.correctionLimit - teacher.correctionsUsed,
+//       assignments: formattedAssignments,
+//     });
+//   } catch (error) {
+//     console.error("Error fetching teacher dashboard data:", error);
+//     return res.status(500).json({ message: "Internal server error" });
+//   }
+// };
+
+export const getTeacherDashboardData = async (req: Request, res: Response) => {
+  try {
+    // @ts-ignore
+    const teacherId = req.user?.useId;
+    // ✅ Make sure your middleware sets req.user.useId and req.user.role
+    // @ts-ignore
+    // const teacherId = req.user?.useId;
+    // const role = req.user.role;
+
+    // if (!teacherId || role !== Role.Teacher) {
+    //   return res.status(403).json({ message: "Access denied" });
+    // }
+
+    // ✅ Get teacher's basic info
+    const teacher = await prisma.user.findUnique({
+      where: { id: teacherId },
+      select: {
+        fullName: true,
+        correctionLimit: true,
+        correctionsUsed: true,
+        role: true,
+      },
+    });
+
+    if (!teacher || teacher.role !== Role.Teacher) {
+      return res.status(404).json({ message: "Teacher not found" });
+    }
+
+    // ✅ Get teacher's assignments (class + subject)
+    const assignments = await prisma.teacherClass.findMany({
+      where: { teacherId },
+      include: {
+        class: { select: { id: true, name: true } },
+        subject: { select: { id: true, name: true } },
+      },
+    });
+
+    const formattedAssignments = assignments.map((a) => ({
+      id: a.id,
+      classId: a.class.id,
+      className: a.class.name,
+      subjectId: a.subject.id,
+      subjectName: a.subject.name,
+    }));
+
+    return res.status(200).json({
+      teacherName: teacher.fullName,
+      correctionLimit: teacher.correctionLimit,
+      correctionsUsed: teacher.correctionsUsed,
+      remainingCorrections: teacher.correctionLimit - teacher.correctionsUsed,
+      assignments: formattedAssignments,
+    });
+  } catch (error) {
+    console.error("Error fetching teacher dashboard data:", error);
+    return res.status(500).json({ message: "Internal server error" });
   }
 };

@@ -30,3 +30,8 @@ export type DisciplineActionUpdateInput = {
   outcome?: string;
   completedDate?: Date;
 };
+export interface JwtPayload {
+  id: number;
+  role: "Admin" | "Teacher" | "User";
+  email: string;
+}

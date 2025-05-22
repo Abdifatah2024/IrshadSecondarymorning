@@ -33,6 +33,7 @@ import {
   getMyCorrectionLimit,
   getTeacherAssignmentsById,
   getTeacherCorrectionById,
+  getTeacherDashboardData,
   registerTeacher,
   setCorrectionLimit,
   TeacherEnterScore,
@@ -106,5 +107,6 @@ router.get(
   getTeacherCorrectionById
 );
 router.get("/me/correction-limit", authenticate, getMyCorrectionLimit);
+router.get("/dashboard-data", authenticate, getTeacherDashboardData);
 
 export default router;
