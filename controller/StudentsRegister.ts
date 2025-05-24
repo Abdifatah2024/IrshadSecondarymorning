@@ -1371,6 +1371,42 @@ export const deleteMultipleStudentsPermanently = async (
   }
 };
 
+export const deleteStudentAndRelations = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const studentId = Number(req.params.id);
 
+    const student = await prisma.student.findUnique({
+      where: { id: studentId },
+    });
+
+    if (!student) {
+      return res.status(404).json({ message: "Student not found" });
+    }
+
+    // Transaction to delete all related records
+    await prisma.$transaction([
+      prisma.attendance.deleteMany({ where: { studentId } }),
+      prisma.studentFee.deleteMany({ where: { studentId } }),
+      prisma.payment.deleteMany({ where: { studentId } }),
+      prisma.discipline.deleteMany({ where: { studentId } }), // 👈 Discipline added here
+      prisma.studentAccount.deleteMany({ where: { studentId } }), // 👈 Discipline added here
+      prisma.score.deleteMany({ where: { studentId } }), // 👈 Discipline added here
+      prisma.paymentAllocation.deleteMany({ where: { studentId } }), // 👈 Discipline added here
+      prisma.student.delete({ where: { id: studentId } }),
+    ]);
+
+    res.status(200).json({
+      message: "Student and all related records deleted successfully",
+    });
+  } catch (error) {
+    console.error("Error deleting student and related records:", error);
+    res
+      .status(500)
+      .json({ message: "Server error while deleting student and relations" });
+  }
+};
 
 export { upload };

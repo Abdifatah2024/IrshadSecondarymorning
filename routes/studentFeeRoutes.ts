@@ -11,12 +11,19 @@ import {
   verifyDiscount,
   listDiscounts,
   getStudentsWithUnpaidFeesOrBalance,
+  getMonthlyIncomeOverview,
+  deleteStudentFeesByMonth,
+  getAllGeneratedMonths,
+  getStudentDepositStatus,
+  getAllStudentAccountSummaries,
+  getCombinedPayments,
 } from "../controller/PaymentContorller";
 import { authenticate } from "../middlewares/authaniticator";
 
 const router = express.Router();
 
 // Generate monthly fees for all studentss
+router.get("/students/balance-summaries", getAllStudentAccountSummaries);
 
 router.post("/generate-monthly-fees", generateMonthlyFees);
 router.get("/StudentWithBalance", getStudentsWithUnpaidFeesOrBalance);
@@ -33,5 +40,10 @@ router.get("/payment-allocations", getAllPaymentAllocations);
 router.get("/admin/fee-inconsistencies", getFeeInconsistencies);
 router.post("/discounts/verify", verifyDiscount);
 router.post("/discounts/list", listDiscounts);
+router.get("/income-required", getMonthlyIncomeOverview);
+router.delete("/delete-student-fees", deleteStudentFeesByMonth);
+router.get("/months-generated", getAllGeneratedMonths);
+router.get("/students/:id/deposit-status", getStudentDepositStatus);
+router.get("/payments/combined", getCombinedPayments);
 
 export default router;

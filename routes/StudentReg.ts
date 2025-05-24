@@ -30,6 +30,7 @@ import {
   getTopAbsentStudents,
   getAbsentStudentsByDate,
   deleteMultipleStudentsPermanently,
+  deleteStudentAndRelations,
 } from "../controller/StudentsRegister";
 
 import { getYearlyProgressReportByStudent } from "../controller/exam.controller";
@@ -101,6 +102,8 @@ router.get("/Get/:id", getStudentById);
 //     console.error(error);
 //     res.status(500).json({ error: "Failed to send message" });
 //   }
+
 // });
+router.delete("/delete-all/:id", deleteStudentAndRelations);
 
 export default router;
