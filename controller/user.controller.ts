@@ -754,4 +754,74 @@ export const deleteEmployee = async (req: Request, res: Response) => {
   }
 };
 
+// controllers/userController.ts
+
+export const listParentUsers = async (req: Request, res: Response) => {
+  try {
+    const parents = await prisma.user.findMany({
+      where: {
+        role: "PARENT",
+      },
+      include: {
+        parentStudents: true, // Include associated students
+      },
+    });
+
+    res.status(200).json({ parents });
+  } catch (error) {
+    console.error("Error fetching parent users:", error);
+    res.status(500).json({ message: "Server error fetching parent users" });
+  }
+};
+
+// GET /api/students/my
+// export const getMyStudents = async (req: Request, res: Response) => {
+//   try {
+//     // @ts-ignore
+//     const user = req.user; // From auth middleware
+
+//     // Check if user is a parent
+//     if (user.role !== "PARENT") {
+//       return res
+//         .status(403)
+//         .json({ message: "Access denied: Not a parent account" });
+//     }
+
+//     const students = await prisma.student.findMany({
+//       where: {
+//         parentUserId: user.id, // only their children
+//       },
+//     });
+
+//     res.status(200).json({ students });
+//   } catch (error) {
+//     console.error("Error fetching parent's students:", error);
+//     res.status(500).json({ message: "Server error" });
+//   }
+// };
+
+export const getMyStudents = async (req: Request, res: Response) => {
+  try {
+    // @ts-ignore — JWT decoded user info
+    const user = req.user;
+
+    if (!user || user.role !== "PARENT") {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    const parentId = user.useId; // ✅ important: use `useId`, not `user.id`
+
+    const students = await prisma.student.findMany({
+      where: {
+        parentUserId: parentId, // ✅ this filters only students of the logged-in parent
+      },
+    });
+
+    res.status(200).json({ students });
+  } catch (error) {
+    console.error("Error fetching parent's students:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
 //

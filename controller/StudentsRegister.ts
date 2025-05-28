@@ -5,6 +5,7 @@ import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 const prisma = new PrismaClient();
 import multer from "multer";
 import * as XLSX from "xlsx";
+import bcryptjs from "bcryptjs";
 
 // const upload = multer({ dest: "uploads/" }); // store uploaded files temporarily
 const upload = multer({
@@ -12,12 +13,115 @@ const upload = multer({
 });
 
 // Create Student
+
+// export const createStudent = async (req: Request, res: Response) => {
+//   try {
+//     const {
+//       firstname,
+//       middlename,
+//       lastname,
+//       classId,
+//       phone,
+//       phone2,
+//       bus,
+//       address,
+//       previousSchool,
+//       motherName,
+//       gender,
+//       Age,
+//       fee,
+//     } = req.body;
+
+//     // Get current logged-in user (creator)
+//     // @ts-ignore
+//     const user = req.user;
+
+//     // Check for duplicate student by phone
+//     const existingStudent = await prisma.student.findFirst({
+//       where: { phone },
+//     });
+
+//     if (existingStudent) {
+//       return res.status(400).json({ message: "Phone number already exists" });
+//     }
+
+//     const fullname = `${firstname} ${middlename} ${lastname}`;
+//     const username = `${lastname.toLowerCase()}_${phone.slice(-4)}`;
+//     const email = `${username}@parent.school.com`;
+
+//     // Check for email collision just in case
+//     const existingParent = await prisma.user.findUnique({
+//       where: { email },
+//     });
+
+//     // if (existingParent) {
+//     //   return res
+//     //     .status(400)
+//     //     .json({ message: "Generated parent email already exists" });
+//     // }
+
+//     // Hash the student's phone as the parent password
+//     const hashedPassword = await bcryptjs.hash(phone, 10);
+
+//     // Create parent user
+//     const parentUser = await prisma.user.create({
+//       data: {
+//         fullName: motherName || `${firstname} ${lastname} Parent`,
+//         username,
+//         email,
+//         phoneNumber: phone,
+//         password: hashedPassword,
+//         confirmpassword: hashedPassword,
+//         role: "PARENT",
+//       },
+//     });
+
+//     // Create student and link to parent user
+//     const newStudent = await prisma.student.create({
+//       data: {
+//         firstname,
+//         middlename,
+//         lastname,
+//         fullname,
+//         classId,
+//         phone,
+//         phone2,
+//         bus,
+//         address,
+//         previousSchool,
+//         motherName,
+//         gender,
+//         Age,
+//         fee,
+//         userid: user.useId,
+//         parentUserId: parentUser.id,
+//       },
+//     });
+
+//     res.status(201).json({
+//       message: "Student and parent created successfully",
+//       student: newStudent,
+//       parentAccount: {
+//         email,
+//         username,
+//         password: phone, // only for first-time login (optional)
+//       },
+//     });
+//   } catch (error) {
+//     console.error("Error creating student and parent:", error);
+//     res
+//       .status(500)
+//       .json({ message: "Server error while creating student and parent" });
+//   }
+// };
+
 export const createStudent = async (req: Request, res: Response) => {
   try {
     const {
       firstname,
       middlename,
       lastname,
+      fourtname, // ✅ new field
       classId,
       phone,
       phone2,
@@ -32,40 +136,70 @@ export const createStudent = async (req: Request, res: Response) => {
 
     // @ts-ignore
     const user = req.user;
-    const checkStudent = await prisma.student.findFirst({
-      where: { phone },
+
+    const fullname =
+      `${firstname} ${middlename} ${lastname} ${fourtname}`.trim();
+    const username = `${lastname.toLowerCase()}_${phone.slice(-4)}`;
+    const email = `${username}@parent.school.com`;
+
+    // ✅ Reuse or create parent
+    let parentUser = await prisma.user.findFirst({
+      where: {
+        phoneNumber: phone,
+        role: "PARENT",
+      },
     });
-    if (checkStudent) {
-      return res.status(400).json({ message: "Phone number already exists" });
+
+    if (!parentUser) {
+      const hashedPassword = await bcryptjs.hash(phone, 10);
+      parentUser = await prisma.user.create({
+        data: {
+          fullName: motherName || `${firstname} ${lastname} Parent`,
+          username,
+          email,
+          phoneNumber: phone,
+          password: hashedPassword,
+          confirmpassword: hashedPassword,
+          role: "PARENT",
+        },
+      });
     }
 
-    const fullname = `${firstname} ${middlename} ${lastname}`;
-
+    // ✅ Create student
     const newStudent = await prisma.student.create({
       data: {
         firstname,
         middlename,
         lastname,
+        fourtname, // ✅ save it
         fullname,
         classId,
         phone,
-        gender,
-        Age,
-        fee,
+        phone2,
         bus,
         address,
-        phone2,
         previousSchool,
         motherName,
+        gender,
+        Age: +Age,
+        fee,
         userid: user.useId,
+        parentUserId: parentUser.id,
       },
     });
 
-    res
-      .status(201)
-      .json({ message: "Student created successfully", student: newStudent });
+    res.status(201).json({
+      message: "Student created and linked to parent successfully",
+      student: newStudent,
+      parentAccount: {
+        email: parentUser.email,
+        username: parentUser.username,
+        password: phone,
+        parentId: parentUser.id,
+      },
+    });
   } catch (error) {
-    console.error("Error creating student:", error);
+    console.error("Error creating student with parent link:", error);
     res.status(500).json({ message: "Server error while creating student" });
   }
 };
@@ -352,31 +486,6 @@ export const createMultipleStudentsByExcel = async (
   }
 };
 
-export const getStudents = async (req: Request, res: Response) => {
-  try {
-    const students = await prisma.student.findMany({
-      where: { isdeleted: false },
-      include: {
-        classes: true,
-        user: {
-          select: {
-            id: true,
-            fullName: true,
-            username: true,
-          },
-        },
-        StudentFee: true,
-        Payment: true,
-      },
-    });
-
-    res.status(200).json(students);
-  } catch (error) {
-    console.error("Error fetching students:", error);
-    res.status(500).json({ message: "Server error while fetching students" });
-  }
-};
-
 // Get Single Student by ID
 export const getStudentById = async (req: Request, res: Response) => {
   try {
@@ -462,6 +571,63 @@ export const getStudentByIdOrName = async (req: Request, res: Response) => {
 };
 
 // Update Student
+// export const updateStudent = async (req: Request, res: Response) => {
+//   try {
+//     const studentId = Number(req.params.id);
+//     const {
+//       firstname,
+//       middlename,
+//       lastname,
+//       classId,
+//       phone,
+//       gender,
+//       Age,
+//       fee,
+//       phone2,
+//       bus,
+//       address,
+//       previousSchool,
+//       motherName,
+//     } = req.body;
+
+//     const fullname = `${firstname} ${middlename || ""} ${lastname}`.trim();
+
+//     // @ts-ignore
+//     const user = req.user;
+
+//     const updatedStudent = await prisma.student.update({
+//       where: { id: studentId },
+//       data: {
+//         firstname,
+//         middlename,
+//         lastname,
+//         fullname,
+//         classId: Number(classId),
+//         phone,
+//         gender,
+//         Age,
+//         fee: Number(fee),
+//         phone2,
+//         bus,
+//         address,
+//         previousSchool,
+//         motherName,
+//         userid: Number(user.useId),
+//       },
+//     });
+
+//     res.status(200).json({
+//       message: "Student updated successfully",
+//       student: updatedStudent,
+//     });
+//   } catch (error) {
+//     console.error("Error updating student:", error);
+//     res.status(500).json({ message: "Server error while updating student" });
+//   }
+// };
+
+// UPDATE STUDENT CLASS.
+
 export const updateStudent = async (req: Request, res: Response) => {
   try {
     const studentId = Number(req.params.id);
@@ -469,6 +635,7 @@ export const updateStudent = async (req: Request, res: Response) => {
       firstname,
       middlename,
       lastname,
+      fourtname, // ✅ newly added
       classId,
       phone,
       gender,
@@ -481,7 +648,19 @@ export const updateStudent = async (req: Request, res: Response) => {
       motherName,
     } = req.body;
 
-    const fullname = `${firstname} ${middlename || ""} ${lastname}`.trim();
+    // ✅ full name (can be used for display)
+    const fullname = `${firstname} ${middlename || ""} ${lastname || ""} ${
+      fourtname || ""
+    }`
+      .trim()
+      .replace(/\s+/g, " ");
+
+    // ✅ family name (your requested format)
+    const familyName = `Reer ${middlename || ""} ${lastname || ""} ${
+      fourtname || ""
+    }`
+      .trim()
+      .replace(/\s+/g, " ");
 
     // @ts-ignore
     const user = req.user;
@@ -492,7 +671,9 @@ export const updateStudent = async (req: Request, res: Response) => {
         firstname,
         middlename,
         lastname,
-        fullname,
+        fourtname, // ✅ added
+        fullname, // ✅ updated
+        familyName, // ✅ added
         classId: Number(classId),
         phone,
         gender,
@@ -516,8 +697,6 @@ export const updateStudent = async (req: Request, res: Response) => {
     res.status(500).json({ message: "Server error while updating student" });
   }
 };
-
-// UPDATE STUDENT CLASS.
 
 export const updateStudentClass = async (req: Request, res: Response) => {
   try {
@@ -885,72 +1064,223 @@ export const markAttendance = async (req: Request, res: Response) => {
   }
 };
 
+// export const getTopAbsentStudents = async (req: Request, res: Response) => {
+//   try {
+//     // Get top 3 students with highest absent count
+//     const topAbsentStudents = await prisma.student.findMany({
+//       select: {
+//         id: true,
+//         fullname: true,
+//         absentCount: true,
+//         classId: true,
+//       },
+//       orderBy: {
+//         absentCount: "desc",
+//       },
+//       take: 5,
+//     });
+
+//     // Get their most recent absence dates
+//     const studentsWithRecentAbsences = await Promise.all(
+//       topAbsentStudents.map(async (student) => {
+//         const recentAbsences = await prisma.attendance.findMany({
+//           where: {
+//             studentId: student.id,
+//             present: false,
+//           },
+//           select: {
+//             date: true,
+//             remark: true,
+//           },
+//           orderBy: {
+//             date: "desc",
+//           },
+//           take: 5, // Get last 3 absence dates
+//         });
+
+//         return {
+//           ...student,
+//           recentAbsences: recentAbsences.map((absence) => ({
+//             date: absence.date.toISOString().split("T")[0], // Format as YYYY-MM-DD
+//             remark: absence.remark,
+//             ID: student.id,
+//           })),
+//         };
+//       })
+//     );
+
+//     res.status(200).json({
+//       success: true,
+//       data: studentsWithRecentAbsences.map((student) => ({
+//         id: student.id,
+//         name: student.fullname,
+
+//         totalAbsences: student.absentCount,
+//         recentAbsences: student.recentAbsences,
+//       })),
+//     });
+//   } catch (error) {
+//     console.error("Error fetching top absent students:", error);
+//     res.status(500).json({
+//       success: false,
+//       message: "Failed to retrieve top absent students",
+//       error: Error,
+//     });
+//   }
+// };
+
+//update attendence
+
+export const markViaFingerprint = async (req: Request, res: Response) => {
+  try {
+    const { studentId, timestamp } = req.body;
+
+    if (!studentId || !timestamp) {
+      return res
+        .status(400)
+        .json({ message: "Missing studentId or timestamp" });
+    }
+
+    const attendanceDate = new Date(timestamp);
+
+    // Check if FingerUser exists
+    const fingerUser = await prisma.user.findFirst({
+      where: { username: "fingerprint" },
+    });
+
+    if (!fingerUser) {
+      return res
+        .status(500)
+        .json({ message: "Fingerprint user not found in system" });
+    }
+
+    // Check for existing attendance on the same day
+    const startOfDay = new Date(attendanceDate);
+    startOfDay.setUTCHours(0, 0, 0, 0);
+    const endOfDay = new Date(startOfDay);
+    endOfDay.setUTCDate(endOfDay.getUTCDate() + 1);
+
+    const existing = await prisma.attendance.findFirst({
+      where: {
+        studentId: +studentId,
+        date: {
+          gte: startOfDay,
+          lt: endOfDay,
+        },
+      },
+    });
+
+    if (existing) {
+      return res.status(409).json({
+        message: `Attendance already recorded for ${
+          startOfDay.toISOString().split("T")[0]
+        }`,
+        existingRecord: {
+          status: existing.present ? "Present" : "Absent",
+          time: existing.date.toISOString(),
+        },
+        errorCode: "DUPLICATE_ATTENDANCE",
+      });
+    }
+
+    // Record new attendance
+    const newAttendance = await prisma.attendance.create({
+      data: {
+        studentId: +studentId,
+        present: true,
+        remark: "Present - Fingerprint",
+        date: attendanceDate,
+        userId: fingerUser.id,
+      },
+    });
+
+    res.status(201).json({
+      message: "Attendance marked via fingerprint successfully",
+      attendance: {
+        id: newAttendance.id,
+        studentId: newAttendance.studentId,
+        date: newAttendance.date.toISOString(),
+        status: "Present",
+      },
+    });
+  } catch (error) {
+    console.error("Fingerprint attendance error:", error);
+    res
+      .status(500)
+      .json({ message: "Failed to mark attendance via fingerprint" });
+  }
+};
+
 export const getTopAbsentStudents = async (req: Request, res: Response) => {
   try {
-    // Get top 3 students with highest absent count
-    const topAbsentStudents = await prisma.student.findMany({
+    // 1. Fetch all active students
+    const students = await prisma.student.findMany({
+      where: {
+        isdeleted: false,
+      },
       select: {
         id: true,
         fullname: true,
-        absentCount: true,
-        classId: true,
       },
-      orderBy: {
-        absentCount: "desc",
-      },
-      take: 5,
     });
 
-    // Get their most recent absence dates
-    const studentsWithRecentAbsences = await Promise.all(
-      topAbsentStudents.map(async (student) => {
+    // 2. Count how many times present: false for each student
+    const results = await Promise.all(
+      students.map(async (student) => {
+        const totalAbsences = await prisma.attendance.count({
+          where: {
+            studentId: student.id,
+            present: false, // ✅ base the count on this flag
+          },
+        });
+
         const recentAbsences = await prisma.attendance.findMany({
           where: {
             studentId: student.id,
             present: false,
           },
+          orderBy: {
+            date: "desc",
+          },
+          take: 5,
           select: {
             date: true,
             remark: true,
           },
-          orderBy: {
-            date: "desc",
-          },
-          take: 5, // Get last 3 absence dates
         });
 
         return {
-          ...student,
-          recentAbsences: recentAbsences.map((absence) => ({
-            date: absence.date.toISOString().split("T")[0], // Format as YYYY-MM-DD
-            remark: absence.remark,
+          id: student.id,
+          name: student.fullname,
+          totalAbsences,
+          recentAbsences: recentAbsences.map((entry) => ({
+            date: entry.date.toISOString().split("T")[0],
+            remark: entry.remark,
             ID: student.id,
           })),
         };
       })
     );
 
+    // 3. Sort by highest totalAbsences and return top 5
+    const sorted = results
+      .sort((a, b) => b.totalAbsences - a.totalAbsences)
+      .slice(0, 5);
+
+    // 4. Response
     res.status(200).json({
       success: true,
-      data: studentsWithRecentAbsences.map((student) => ({
-        id: student.id,
-        name: student.fullname,
-
-        totalAbsences: student.absentCount,
-        recentAbsences: student.recentAbsences,
-      })),
+      data: sorted,
     });
   } catch (error) {
-    console.error("Error fetching top absent students:", error);
+    console.error("Error fetching absent students:", error);
     res.status(500).json({
       success: false,
-      message: "Failed to retrieve top absent students",
-      error: Error,
+      message: "Failed to retrieve absent students",
+      error: error instanceof Error ? error.message : String(error),
     });
   }
 };
-
-//update attendence
 
 export const updateStudentAttendance = async (req: Request, res: Response) => {
   try {
@@ -1406,6 +1736,261 @@ export const deleteStudentAndRelations = async (
     res
       .status(500)
       .json({ message: "Server error while deleting student and relations" });
+  }
+};
+
+export const getRegisteredStudentsForDevice = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const students = await prisma.student.findMany({
+      where: {
+        isdeleted: false,
+      },
+      select: {
+        id: true,
+        fullname: true,
+      },
+    });
+
+    res.status(200).json({ success: true, students });
+  } catch (error) {
+    console.error("Failed to fetch students:", error);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+export const getStudents = async (req: Request, res: Response) => {
+  try {
+    const students = await prisma.student.findMany({
+      where: { isdeleted: false },
+      include: {
+        classes: true,
+        user: {
+          select: {
+            id: true,
+            fullName: true,
+            username: true,
+          },
+        },
+        StudentFee: true,
+        Payment: true,
+      },
+    });
+
+    res.status(200).json(students);
+  } catch (error) {
+    console.error("Error fetching students:", error);
+    res.status(500).json({ message: "Server error while fetching students" });
+  }
+};
+
+export const getTodayAbsentStudents = async (req: Request, res: Response) => {
+  try {
+    const today = new Date();
+    const startOfDay = new Date(
+      Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate())
+    );
+    const endOfDay = new Date(startOfDay);
+    endOfDay.setUTCDate(endOfDay.getUTCDate() + 1);
+
+    const absentees = await prisma.attendance.findMany({
+      where: {
+        date: {
+          gte: startOfDay,
+          lt: endOfDay,
+        },
+        present: false,
+      },
+      include: {
+        student: {
+          select: {
+            id: true,
+            fullname: true,
+            classId: true,
+            classes: {
+              select: {
+                name: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const formatted = absentees.map((entry) => ({
+      studentId: entry.student.id,
+      fullname: entry.student.fullname,
+      classId: entry.student.classId,
+      className: entry.student.classes?.name ?? "Unknown",
+      remark: entry.remark,
+    }));
+
+    res.status(200).json({
+      success: true,
+      date: startOfDay.toISOString().split("T")[0],
+      totalAbsent: formatted.length,
+      students: formatted,
+    });
+  } catch (error) {
+    console.error("Error fetching today's absentees:", error);
+    res.status(500).json({ message: "Failed to fetch today's absentees" });
+  }
+};
+
+export const getBrothersList = async (req: Request, res: Response) => {
+  try {
+    // 1. Group all students by parentUserId
+    const grouped = await prisma.student.groupBy({
+      by: ["parentUserId"],
+      _count: {
+        parentUserId: true,
+      },
+      where: {
+        parentUserId: { not: null },
+      },
+    });
+
+    // 2. Filter only parentUserId that has 2 or more students (brothers)
+    const parentIds = grouped
+      .filter((group) => group._count.parentUserId >= 2)
+      .map((group) => group.parentUserId as number);
+
+    // 3. Get all students under those parentUserIds
+    const brothers = await prisma.student.findMany({
+      where: {
+        parentUserId: { in: parentIds },
+        isdeleted: false,
+      },
+      include: {
+        parentUser: {
+          select: {
+            id: true,
+            fullName: true,
+            phoneNumber: true,
+          },
+        },
+        classes: {
+          select: { name: true },
+        },
+      },
+      orderBy: {
+        parentUserId: "asc",
+      },
+    });
+
+    // 4. Group by parent ID for neat response
+    const groupedBrothers: Record<number, any[]> = {};
+    for (const student of brothers) {
+      const parentId = student.parentUserId!;
+      if (!groupedBrothers[parentId]) {
+        groupedBrothers[parentId] = [];
+      }
+      groupedBrothers[parentId].push(student);
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Brothers grouped by parent",
+      data: groupedBrothers,
+    });
+  } catch (error) {
+    console.error("Error fetching brothers:", error);
+    res.status(500).json({
+      message: "Server error while fetching brothers",
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+};
+
+// export const getStudentsByFamilyNameWritten = async (
+//   req: Request,
+//   res: Response
+// ) => {
+//   try {
+//     const { familyName } = req.query;
+
+//     if (!familyName || typeof familyName !== "string") {
+//       return res
+//         .status(400)
+//         .json({ message: "familyName is required in query" });
+//     }
+
+//     const students = await prisma.student.findMany({
+//       where: {
+//         familyName: {
+//           equals: familyName.trim(),
+//           mode: "insensitive",
+//         },
+//         isdeleted: false,
+//       },
+//       select: {
+//         id: true,
+//         firstname: true,
+//         middlename: true,
+//         lastname: true,
+//         fourtname: true,
+//         fullname: true,
+//         classId: true,
+//         classes: { select: { name: true } },
+//       },
+//     });
+
+//     res.status(200).json({
+//       success: true,
+//       familyName,
+//       count: students.length,
+//       students,
+//     });
+//   } catch (error) {
+//     console.error("Error fetching by written family name:", error);
+//     res.status(500).json({ message: "Internal server error" });
+//   }
+// };
+export const getStudentsByFamilyNameWritten = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const { familyName } = req.query;
+
+    if (!familyName || typeof familyName !== "string") {
+      return res
+        .status(400)
+        .json({ message: "familyName is required in query" });
+    }
+
+    const students = await prisma.student.findMany({
+      where: {
+        familyName: {
+          contains: familyName.trim(), // ✅ allows partial match
+          mode: "insensitive", // ✅ case insensitive
+        },
+        isdeleted: false,
+      },
+      select: {
+        id: true,
+        firstname: true,
+        middlename: true,
+        lastname: true,
+        fourtname: true,
+        fullname: true,
+        familyName: true,
+        classId: true,
+        classes: { select: { name: true } },
+      },
+    });
+
+    res.status(200).json({
+      success: true,
+      query: familyName,
+      count: students.length,
+      students,
+    });
+  } catch (error) {
+    console.error("Error fetching by written family name:", error);
+    res.status(500).json({ message: "Internal server error" });
   }
 };
 

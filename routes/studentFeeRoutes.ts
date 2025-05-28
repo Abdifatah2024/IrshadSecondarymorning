@@ -17,6 +17,8 @@ import {
   getStudentDepositStatus,
   getAllStudentAccountSummaries,
   getCombinedPayments,
+  getTodayIncome,
+  getStudentsWithUnpaidFeeMonthly,
 } from "../controller/PaymentContorller";
 import { authenticate } from "../middlewares/authaniticator";
 
@@ -45,5 +47,7 @@ router.delete("/delete-student-fees", deleteStudentFeesByMonth);
 router.get("/months-generated", getAllGeneratedMonths);
 router.get("/students/:id/deposit-status", getStudentDepositStatus);
 router.get("/payments/combined", getCombinedPayments);
+router.get("/income/today", getTodayIncome);
+router.get("/Classfee/status", getStudentsWithUnpaidFeeMonthly);
 
 export default router;

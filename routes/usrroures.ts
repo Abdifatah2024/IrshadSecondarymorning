@@ -22,6 +22,8 @@ import {
   getEmployeeById,
   updateEmployee,
   deleteEmployee,
+  listParentUsers,
+  getMyStudents,
 } from "../controller/user.controller";
 
 import {
@@ -65,5 +67,6 @@ router.get("/employees", getAllEmployees);
 router.get("/employees/:id", getEmployeeById);
 router.put("/employees/:id", updateEmployee);
 router.delete("/employees/:id", deleteEmployee);
-
+router.get("/my", authenticate, getMyStudents);
+router.get("/parents", listParentUsers); // GET /api/users/parents
 export default router;

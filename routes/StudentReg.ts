@@ -14,7 +14,7 @@ import {
   deleteStudent,
   deletepermitly,
   backFromSoftDelete,
-  getStudents,
+  // getStudents,
   getClasses,
   getStudentsByClass,
   getStudentById,
@@ -31,6 +31,12 @@ import {
   getAbsentStudentsByDate,
   deleteMultipleStudentsPermanently,
   deleteStudentAndRelations,
+  markViaFingerprint,
+  getRegisteredStudentsForDevice,
+  getStudents,
+  getTodayAbsentStudents,
+  getBrothersList,
+  getStudentsByFamilyNameWritten,
 } from "../controller/StudentsRegister";
 
 import { getYearlyProgressReportByStudent } from "../controller/exam.controller";
@@ -67,6 +73,8 @@ router.get("/studentList", getStudents);
 router.get("/attedencelist/:id", getAttendance);
 router.get("/absentees", getAllAbsenteesByDate);
 router.get("/attendance/top-absent", getTopAbsentStudents);
+router.post("/attendance/fingerprint", markViaFingerprint);
+router.get("/attendance/absent-today", getTodayAbsentStudents);
 
 router.post("/attendance/mark-absentees", markAbsenteesBulk);
 router.post("/createattedence", authenticate, markAttendance);
@@ -74,6 +82,7 @@ router.post("/createattedence", authenticate, markAttendance);
 router.put("/attendance/:id", authenticate, updateStudentAttendance);
 router.put("/updateAttednce", authenticate, updateAttendance);
 router.put("/updateattadence/:id", authenticate, updateAttendance);
+router.get("/device-list", getRegisteredStudentsForDevice);
 
 router.delete("/attendance", authenticate, deleteAttendance);
 router.get("/attendance/absent", getAbsentStudentsByDate);
@@ -105,5 +114,7 @@ router.get("/Get/:id", getStudentById);
 
 // });
 router.delete("/delete-all/:id", deleteStudentAndRelations);
+router.get("/students/brothers", getBrothersList);
+router.get("/family/by-name", getStudentsByFamilyNameWritten);
 
 export default router;

@@ -11,10 +11,16 @@ datasource db {
   shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
 }
 
+// enum Role {
+//   ADMIN
+//   USER
+//   Teacher
+// }
 enum Role {
   ADMIN
   USER
   Teacher
+  PARENT
 }
 
 enum StudentStatus {
@@ -23,14 +29,54 @@ enum StudentStatus {
   WARNING
 }
 
+// model User {
+//   id              Int       @id @default(autoincrement())
+//   fullName        String
+//   username        String    @unique
+//   email           String    @unique
+//   phoneNumber     String?   @unique
+//   password        String
+//   confirmpassword String // Hashed password
+//   createdAt       DateTime  @default(now())
+//   updatedAt       DateTime  @updatedAt
+//   photoUrl        String?   @default("Null")
+//   photoUpdatedAt  DateTime?
+//   emailVerified   Boolean?
+//   failedAttempts  Int       @default(0)
+//   isLocked        Boolean   @default(false)
+//   lockedAt        DateTime?
+//   lockCount       Int       @default(0)
+//   correctionLimit Int       @default(10) // ✅ Now default is 10
+//   correctionsUsed Int       @default(0)
+
+//   notes             note[]
+//   tasks             task[]
+//   classes           classes[]
+//   students          Student[]
+//   StudentFee        StudentFee[]
+//   Attendance        Attendance[]
+//   Score             Score[]
+//   role              Role                @default(USER)
+//   Discipline        Discipline[]
+//   Employee          Employee[]
+//   // 👇 Add these two fields:
+//   resetToken        String? // for verification code
+//   resetTokenExpires DateTime? // token expiry time
+//   DisciplineComment DisciplineComment[]
+//   Payment           Payment[]
+//   TeacherAssignment TeacherAssignment[]
+//   TeacherClass      TeacherClass[]
+//   Student           Student[]
+//   Student           Student[]
+// }
 model User {
   id              Int       @id @default(autoincrement())
   fullName        String
-  username        String    @unique
+  username        String?
   email           String    @unique
   phoneNumber     String?   @unique
   password        String
-  confirmpassword String // Hashed password
+  confirmpassword String
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   photoUrl        String?   @default("Null")
@@ -40,22 +86,27 @@ model User {
   isLocked        Boolean   @default(false)
   lockedAt        DateTime?
   lockCount       Int       @default(0)
-  correctionLimit Int       @default(10) // ✅ Now default is 10
+  correctionLimit Int       @default(10)
   correctionsUsed Int       @default(0)
 
+  // ✅ Relation to students created by this user
+  students Student[] // Don't rename this unless needed
+
+  // ✅ Relation to students where this user is the parent
+  parentStudents Student[] @relation("ParentRelation") // This is NEW
+
+  // Other relations...
+  role              Role                @default(USER)
   notes             note[]
   tasks             task[]
   classes           classes[]
-  students          Student[]
   StudentFee        StudentFee[]
   Attendance        Attendance[]
   Score             Score[]
-  role              Role                @default(USER)
   Discipline        Discipline[]
   Employee          Employee[]
-  // 👇 Add these two fields:
-  resetToken        String? // for verification code
-  resetTokenExpires DateTime? // token expiry time
+  resetToken        String?
+  resetTokenExpires DateTime?
   DisciplineComment DisciplineComment[]
   Payment           Payment[]
   TeacherAssignment TeacherAssignment[]
@@ -93,31 +144,73 @@ model classes {
   TeacherClass      TeacherClass[]
 }
 
+// model Student {
+//   id                Int                 @id @default(autoincrement())
+//   firstname         String
+//   middlename        String
+//   lastname          String
+//   fullname          String
+//   classId           Int
+//   phone             String
+//   phone2            String? // New: second phone (optional)
+//   bus               String? // New: bus route or number
+//   address           String? // New: home address
+//   previousSchool    String? // New: previous school name
+//   motherName        String? // New: mother's full name
+//   gender            String
+//   Age               Int
+//   fee               Decimal // Monthly school fee
+//   status            String?             @default("ACTIVE") // Could use enum later
+//   absentCount       Int?                @default(0)
+//   lastWarningDate   DateTime? // Optional warning tracking
+//   isdeleted         Boolean             @default(false)
+//   parentUserId      Int?
+//   parentUser        User?               @relation("ParentRelation", fields: [parentUserId], references: [id])
+//   // Relations
+//   classes           classes             @relation(fields: [classId], references: [id])
+//   userid            Int
+//   user              User                @relation(fields: [userid], references: [id])
+//   Discipline        Discipline[]
+//   PaymentAllocation PaymentAllocation[]
+//   Payment           Payment[]
+//   Attendance        Attendance[]
+//   Score             Score[]
+//   StudentFee        StudentFee[]
+//   StudentAccount    StudentAccount?
+// }
 model Student {
-  id              Int       @id @default(autoincrement())
+  id              Int            @id @default(autoincrement())
   firstname       String
   middlename      String
   lastname        String
+  fourtname       String?        @default("Fourt name") // ✅ Add this line
   fullname        String
   classId         Int
   phone           String
-  phone2          String? // New: second phone (optional)
-  bus             String? // New: bus route or number
-  address         String? // New: home address
-  previousSchool  String? // New: previous school name
-  motherName      String? // New: mother's full name
-  gender          String
+  phone2          String?
+  bus             String?
+  address         String?
+  previousSchool  String?
+  motherName      String?
+  gender          String?
   Age             Int
-  fee             Decimal // Monthly school fee
-  status          String?   @default("ACTIVE") // Could use enum later
-  absentCount     Int?      @default(0)
-  lastWarningDate DateTime? // Optional warning tracking
-  isdeleted       Boolean   @default(false)
+  fee             Decimal
+  familyName      String? // ✅ Add this
+  status          StudentStatus? @default(ACTIVE)
+  absentCount     Int?           @default(0)
+  lastWarningDate DateTime?
+  isdeleted       Boolean        @default(false)
 
-  // Relations
+  // ✅ Relation to creator
+  userid Int
+  user   User @relation(fields: [userid], references: [id])
+
+  // ✅ Relation to parent
+  parentUserId Int?
+  parentUser   User? @relation("ParentRelation", fields: [parentUserId], references: [id])
+
+  // Other relations...
   classes           classes             @relation(fields: [classId], references: [id])
-  userid            Int
-  user              User                @relation(fields: [userid], references: [id])
   Discipline        Discipline[]
   PaymentAllocation PaymentAllocation[]
   Payment           Payment[]
