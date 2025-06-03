@@ -37,6 +37,9 @@ import {
   getTodayAbsentStudents,
   getBrothersList,
   getStudentsByFamilyNameWritten,
+  getParentStudentAttendance,
+  updateStudentParent,
+  getStudentsWithSameBus,
 } from "../controller/StudentsRegister";
 
 import { getYearlyProgressReportByStudent } from "../controller/exam.controller";
@@ -86,6 +89,7 @@ router.get("/device-list", getRegisteredStudentsForDevice);
 
 router.delete("/attendance", authenticate, deleteAttendance);
 router.get("/attendance/absent", getAbsentStudentsByDate);
+router.get("/parent/attendance", authenticate, getParentStudentAttendance);
 
 /* -------------------------- Soft Delete / Restore -------------------------- */
 router.get("/students/soft-deleted", listSoftDeletedStudents);
@@ -114,7 +118,9 @@ router.get("/Get/:id", getStudentById);
 
 // });
 router.delete("/delete-all/:id", deleteStudentAndRelations);
-router.get("/students/brothers", getBrothersList);
+router.get("/students/brothers", authenticate, getBrothersList);
 router.get("/family/by-name", getStudentsByFamilyNameWritten);
+router.put("/student/update-parent", updateStudentParent);
+router.get("/students/same-bus/:bus", getStudentsWithSameBus);
 
 export default router;

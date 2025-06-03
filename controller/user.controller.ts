@@ -11,7 +11,7 @@ import { v4 as uuidv4 } from "uuid";
 import path from "path";
 import multer from "multer";
 import validator from "validator";
-
+import { sendResetEmail } from "../controller/sendResetEmail";
 // ─────────────────────────────────────────────────────
 // Prisma Client
 // ─────────────────────────────────────────────────────
@@ -825,3 +825,152 @@ export const getMyStudents = async (req: Request, res: Response) => {
 };
 
 //
+
+// controllers/authController.ts
+import crypto from "crypto";
+
+// export const requestPasswordReset = async (req: Request, res: Response) => {
+//   try {
+//     const { email } = req.body;
+//     const user = await prisma.user.findUnique({
+//       where: { email: email.toLowerCase() },
+//     });
+
+//     if (!user)
+//       return res
+//         .status(404)
+//         .json({ message: "No user found with that email." });
+
+//     // Limit: 3 times per hour
+//     const now = new Date();
+//     const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+
+//     if (user.lastResetRequestAt && user.lastResetRequestAt > oneHourAgo) {
+//       if (user.resetRequestCount >= 3) {
+//         return res.status(429).json({
+//           message: "Too many reset requests. Try again in 1 hour.",
+//         });
+//       }
+//     } else {
+//       // Reset count if it's been more than an hour
+//       await prisma.user.update({
+//         where: { id: user.id },
+//         data: {
+//           resetRequestCount: 0,
+//         },
+//       });
+//     }
+
+//     const token = crypto.randomBytes(32).toString("hex");
+//     const tokenExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 min
+
+//     await prisma.user.update({
+//       where: { id: user.id },
+//       data: {
+//         resetToken: token,
+//         resetTokenExpires: tokenExpires,
+//         resetRequestCount: { increment: 1 },
+//         lastResetRequestAt: now,
+//       },
+//     });
+
+//     return res.status(200).json({
+//       message: "Reset token sent.",
+//       resetToken: token, // for testing only
+//     });
+//   } catch (error) {
+//     console.error("Reset token error:", error);
+//     res.status(500).json({ message: "Server error" });
+//   }
+// };
+
+export const requestPasswordReset = async (req: Request, res: Response) => {
+  try {
+    const { email } = req.body;
+    const user = await prisma.user.findUnique({
+      where: { email: email.toLowerCase() },
+    });
+
+    if (!user)
+      return res
+        .status(404)
+        .json({ message: "No user found with that email." });
+
+    // Rate limiting logic (as you already have)
+
+    const token = crypto.randomBytes(32).toString("hex");
+    const tokenExpires = new Date(Date.now() + 15 * 60 * 1000);
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        resetToken: token,
+        resetTokenExpires: tokenExpires,
+        resetRequestCount: { increment: 1 },
+        lastResetRequestAt: new Date(),
+      },
+    });
+
+    // ✅ Send the email
+    await sendResetEmail(user.email, token);
+
+    res.status(200).json({
+      message: "Reset link sent to your email address.",
+    });
+  } catch (error) {
+    console.error("Reset token error:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+export const resetPasswordWithToken = async (req: Request, res: Response) => {
+  try {
+    const { token, newPassword } = req.body;
+
+    if (!token || !newPassword)
+      return res
+        .status(400)
+        .json({ message: "Token and new password are required" });
+
+    const user = await prisma.user.findFirst({
+      where: {
+        resetToken: token,
+        resetTokenExpires: { gte: new Date() }, // check token not expired
+      },
+    });
+
+    if (!user)
+      return res.status(400).json({ message: "Invalid or expired token" });
+
+    if (
+      !validator.isStrongPassword(newPassword, {
+        minLength: 6,
+        minLowercase: 1,
+        minUppercase: 1,
+        minNumbers: 1,
+        minSymbols: 1,
+      })
+    ) {
+      return res.status(400).json({
+        message:
+          "Password must be at least 6 characters with 1 uppercase, 1 lowercase, 1 number, and 1 symbol",
+      });
+    }
+
+    const hashedPassword = await bcryptjs.hash(newPassword, 12);
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        password: hashedPassword,
+        resetToken: null,
+        resetTokenExpires: null,
+      },
+    });
+
+    return res.status(200).json({ message: "Password reset successfully" });
+  } catch (error) {
+    console.error("Password reset error:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};

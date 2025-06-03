@@ -24,6 +24,8 @@ import {
   deleteEmployee,
   listParentUsers,
   getMyStudents,
+  requestPasswordReset,
+  resetPasswordWithToken,
 } from "../controller/user.controller";
 
 import {
@@ -69,4 +71,7 @@ router.put("/employees/:id", updateEmployee);
 router.delete("/employees/:id", deleteEmployee);
 router.get("/my", authenticate, getMyStudents);
 router.get("/parents", listParentUsers); // GET /api/users/parents
+router.post("/password-reset/request", requestPasswordReset);
+router.post("/password-reset/confirm", resetPasswordWithToken);
+
 export default router;

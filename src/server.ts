@@ -8,6 +8,9 @@ import studentRouter from "../routes/StudentReg";
 import examtypeRouter from "../routes/Exam";
 import Dicipline from "../routes/disciplineroutes";
 import FeeRouter from "../routes/studentFeeRoutes";
+import AdvanceRouter from "../routes/EmployeeAdvanceRoute";
+import expenseRoutes from "../routes/expenseRoutes";
+import FinanacialRoutes from "../routes/financialReports";
 import cors from "cors";
 // import morgan from "morgan";
 const app = express();
@@ -37,6 +40,9 @@ app.use("/student", studentRouter);
 app.use("/exam", examtypeRouter);
 app.use("/Dicipline", Dicipline);
 app.use("/fee", FeeRouter);
+app.use("/EmployeeAdvance", AdvanceRouter);
+app.use("/expenses", expenseRoutes);
+app.use("/financial/Reports", FinanacialRoutes);
 
 // Fix 3: Add error handling middleware
 app.use(
