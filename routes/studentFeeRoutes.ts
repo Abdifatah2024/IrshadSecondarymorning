@@ -19,6 +19,8 @@ import {
   getCombinedPayments,
   getTodayIncome,
   getStudentsWithUnpaidFeeMonthly,
+  createMultiStudentPayment,
+  getAllDiscountLogs,
 } from "../controller/PaymentContorller";
 import { authenticate } from "../middlewares/authaniticator";
 
@@ -31,9 +33,11 @@ router.post("/generate-monthly-fees", generateMonthlyFees);
 router.get("/StudentWithBalance", getStudentsWithUnpaidFeesOrBalance);
 // Get all fees for a student (by ID)
 router.get("/students/:id", getStudentFees);
+router.get("/discounts", getAllDiscountLogs);
 
 // Create a payment for a student
 router.post("/payment", authenticate, createStudentPayment);
+router.post("/payment/multi", authenticate, createMultiStudentPayment);
 
 router.get("/payment/:studentId/history", getPaymentHistory);
 router.get("/students/:id/balance", getStudentBalanceSummary);

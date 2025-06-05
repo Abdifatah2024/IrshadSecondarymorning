@@ -66,6 +66,7 @@ model User {
   parentStudents Student[] @relation("ParentRelation") // This is NEW
 
   // Other relations...
+  approvedDiscounts DiscountLog[]       @relation("ApprovedDiscounts")
   role              Role                @default(USER)
   notes             note[]
   tasks             task[]
@@ -81,6 +82,7 @@ model User {
   TeacherClass      TeacherClass[]
   EmployeeAdvance   EmployeeAdvance[]
   Expense           Expense[]
+  DiscountLog       DiscountLog[]
 }
 
 model note {
@@ -190,6 +192,7 @@ model Student {
   Score              Score[]
   StudentFee         StudentFee[]
   StudentAccount     StudentAccount?
+  DiscountLog        DiscountLog[]
 }
 
 model StudentFee {
@@ -233,6 +236,11 @@ model DiscountLog {
   verifiedBy   String?
   verifiedAt   DateTime?
   createdAt    DateTime  @default(now())
+
+  student      Student @relation(fields: [studentId], references: [id])
+  approvedUser User    @relation("ApprovedDiscounts", fields: [approvedBy], references: [id])
+  User         User?   @relation(fields: [userId], references: [id])
+  userId       Int?
 
   @@index([studentId])
   @@index([studentFeeId])

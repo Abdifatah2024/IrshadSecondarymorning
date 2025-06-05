@@ -8,11 +8,12 @@ import {
   updateExpense,
   deleteExpense,
   getMonthlyBalance,
+  getExpenseSummary,
 } from "../controller/Expenses.Controller";
 import { authenticate } from "../middlewares/authaniticator";
 
 const router = express.Router();
-
+router.get("/summary", getExpenseSummary);
 router.post("/create", authenticate, createExpense); // ➕ Create
 router.get("/", getExpenses); // 📥 List all
 router.get("/:id", getExpenseById); // 🔍 Get one

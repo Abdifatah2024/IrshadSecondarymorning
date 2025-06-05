@@ -277,3 +277,72 @@ export const getMonthlyBalance = async (req: Request, res: Response) => {
     return res.status(500).json({ message: "Internal server error" });
   }
 };
+
+export const getExpenseSummary = async (req: Request, res: Response) => {
+  try {
+    const month = parseInt(req.query.month as string);
+    const year = parseInt(req.query.year as string);
+
+    if (!month || !year) {
+      return res.status(400).json({ message: "Month and Year are required" });
+    }
+
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = new Date(year, month, 0, 23, 59, 59, 999);
+
+    // Fetch standard expenses
+    const expenses = await prisma.expense.findMany({
+      where: {
+        date: {
+          gte: startDate,
+          lte: endDate,
+        },
+      },
+      select: {
+        category: true,
+        amount: true,
+      },
+    });
+
+    // Fetch employee advances (treat as an expense category)
+    const advances = await prisma.employeeAdvance.findMany({
+      where: { month, year },
+      select: { amount: true },
+    });
+
+    const summaryMap: Record<string, number> = {};
+    let total = 0;
+
+    // Add expenses
+    expenses.forEach((exp) => {
+      const cat = exp.category || "Uncategorized";
+      summaryMap[cat] = (summaryMap[cat] || 0) + Number(exp.amount);
+      total += Number(exp.amount);
+    });
+
+    // Add advances as a new category
+    const totalAdvance = advances.reduce((sum, a) => sum + Number(a.amount), 0);
+    if (totalAdvance > 0) {
+      summaryMap["Employee Advances"] =
+        (summaryMap["Employee Advances"] || 0) + totalAdvance;
+      total += totalAdvance;
+    }
+
+    const categorySummary = Object.entries(summaryMap).map(
+      ([category, amount]) => ({
+        category,
+        amount,
+      })
+    );
+
+    return res.status(200).json({
+      month,
+      year,
+      totalExpenses: total,
+      categorySummary,
+    });
+  } catch (error) {
+    console.error("Error generating expense summary:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
