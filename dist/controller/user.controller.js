@@ -34,7 +34,7 @@ const uuid_1 = require("uuid");
 const path_1 = __importDefault(require("path"));
 const multer_1 = __importDefault(require("multer"));
 const validator_1 = __importDefault(require("validator"));
-const sendResetEmail_1 = require("../controller/sendResetEmail");
+const sendResetEmail_1 = require("./sendResetEmail");
 // ─────────────────────────────────────────────────────
 // Prisma Client
 // ─────────────────────────────────────────────────────
