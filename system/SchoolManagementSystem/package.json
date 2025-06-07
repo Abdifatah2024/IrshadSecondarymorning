@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "schoolmanagementsystem": "file:../..",
+    "todolistapp": "file:../.."
+  }
+}
