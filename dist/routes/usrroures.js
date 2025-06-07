@@ -6,7 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
 // Middleware
 const authaniticator_1 = require("../middlewares/authaniticator"); // ✅ Consider renaming to "authenticate.ts" for clarity
-const multer_1 = __importDefault(require("../src/config/multer"));
+const multer_1 = __importDefault(require("../config/multer"));
 // Controllers
 const user_controller_1 = require("../controller/user.controller");
 const authController_1 = require("../controller/authController");

@@ -16,7 +16,7 @@ exports.verifyResetCodeAndChangePassword = exports.sendResetCode = void 0;
 const client_1 = require("@prisma/client");
 const prisma = new client_1.PrismaClient();
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
-const notificationService_1 = require("./../src/Utils/notificationService"); // Import at top
+const notificationService_1 = require("../Utils/notificationService"); // Import at top
 const sendResetCode = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { emailOrPhone } = req.body;
