@@ -6,7 +6,6 @@ import {
   getPaymentHistory,
   getStudentBalanceSummary,
   getAllocationsByPayment,
-  getAllPaymentAllocations,
   getFeeInconsistencies,
   verifyDiscount,
   listDiscounts,
@@ -21,6 +20,8 @@ import {
   getStudentsWithUnpaidFeeMonthly,
   createMultiStudentPayment,
   getAllDiscountLogs,
+  getAllPayments,
+  updatePayment,
 } from "../controller/PaymentContorller";
 import { authenticate } from "../middlewares/authaniticator";
 
@@ -42,7 +43,10 @@ router.post("/payment/multi", authenticate, createMultiStudentPayment);
 router.get("/payment/:studentId/history", getPaymentHistory);
 router.get("/students/:id/balance", getStudentBalanceSummary);
 router.get("/Allocation/:id", getAllocationsByPayment);
-router.get("/payment-allocations", getAllPaymentAllocations);
+router.get("/payments", getAllPayments);
+
+// Route to update a specific payment by ID
+router.put("/payments/:id", updatePayment);
 router.get("/admin/fee-inconsistencies", getFeeInconsistencies);
 router.post("/discounts/verify", verifyDiscount);
 router.post("/discounts/list", listDiscounts);

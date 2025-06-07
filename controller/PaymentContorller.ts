@@ -6,7 +6,13 @@ const prisma = new PrismaClient();
 
 // export const createStudentPayment = async (req: Request, res: Response) => {
 //   try {
-//     const { studentId, amountPaid, discount, discountReason = "" } = req.body;
+//     const {
+//       studentId,
+//       amountPaid,
+//       discount,
+//       discountReason,
+//       Description = "",
+//     } = req.body;
 
 //     if (!studentId || amountPaid === undefined) {
 //       return res
@@ -38,7 +44,7 @@ const prisma = new PrismaClient();
 //       });
 //       const previousCarryForward = Number(previousAccount?.carryForward || 0);
 
-//       // Step 1: Get existing unpaid fees
+//       // Step 1: Get unpaid fees
 //       let unpaidFees = await prisma.studentFee.findMany({
 //         where: {
 //           studentId: +studentId,
@@ -52,37 +58,48 @@ const prisma = new PrismaClient();
 //       );
 
 //       let totalAvailable = Number(amountPaid) + previousCarryForward;
-//       const estimatedMonths = Math.ceil(totalAvailable / feeAmount);
+
+//       const estimatedMonths =
+//         totalAvailable < feeAmount ? 1 : Math.ceil(totalAvailable / feeAmount);
+
 //       let lastDate = new Date(currentYear, currentMonth - 1, 1);
 
-//       // Step 2: Create missing months for this student only
+//       // Step 2: Create missing months (via upsert)
 //       for (let i = 0; i < estimatedMonths; i++) {
 //         const month = lastDate.getMonth() + 1;
 //         const year = lastDate.getFullYear();
 //         const key = `${year}-${month}`;
 
 //         if (!existingKeys.has(key)) {
-//           const newFee = await prisma.studentFee.create({
-//             data: {
+//           const newOrExisting = await prisma.studentFee.upsert({
+//             where: {
+//               studentId_month_year: {
+//                 studentId: +studentId,
+//                 month,
+//                 year,
+//               },
+//             },
+//             update: {},
+//             create: {
 //               studentId: +studentId,
 //               month,
 //               year,
 //               isPaid: false,
 //             },
 //           });
-//           unpaidFees.push(newFee);
+
+//           unpaidFees.push(newOrExisting);
 //           existingKeys.add(key);
 //         }
 
 //         lastDate.setMonth(lastDate.getMonth() + 1);
 //       }
 
-//       // Re-sort fees after adding new months
 //       unpaidFees.sort((a, b) =>
 //         a.year === b.year ? a.month - b.month : a.year - b.year
 //       );
 
-//       // Step 3: Get current payment allocations
+//       // Step 3: Get current allocations
 //       const allocationSums = await prisma.paymentAllocation.groupBy({
 //         by: ["studentFeeId"],
 //         where: {
@@ -123,7 +140,7 @@ const prisma = new PrismaClient();
 //         year: number;
 //       }[] = [];
 
-//       // Step 4: Allocate payment to unpaid fees (including new ones)
+//       // Step 4: Allocate (even partial)
 //       for (const feeRecord of unpaidFees) {
 //         if (availableAmount <= 0 && remainingDiscount <= 0) break;
 
@@ -134,7 +151,8 @@ const prisma = new PrismaClient();
 //         const paymentToApply = Math.min(due - discountToApply, availableAmount);
 //         const totalPayment = discountToApply + paymentToApply;
 
-//         if (totalPayment > 0) {
+//         // ✅ Fixed: allow even small allocations
+//         if (paymentToApply > 0 || discountToApply > 0) {
 //           allocations.push({
 //             studentFeeId: feeRecord.id,
 //             amount: totalPayment,
@@ -174,7 +192,7 @@ const prisma = new PrismaClient();
 //         }
 //       }
 
-//       // Step 5: Create payment record
+//       // Step 5: Save payment
 //       const newPayment = await prisma.payment.create({
 //         data: {
 //           studentId: +studentId,
@@ -202,6 +220,7 @@ const prisma = new PrismaClient();
 //       res.status(201).json({
 //         message: "Payment processed successfully",
 //         payment: newPayment,
+//         StudentName: student.fullname,
 //         carryForward: availableAmount,
 //         allocations: detailedAllocations,
 //         appliedDiscounts: discountRecords,
@@ -215,9 +234,16 @@ const prisma = new PrismaClient();
 //     });
 //   }
 // };
+
 export const createStudentPayment = async (req: Request, res: Response) => {
   try {
-    const { studentId, amountPaid, discount, discountReason = "" } = req.body;
+    const {
+      studentId,
+      amountPaid,
+      discount,
+      discountReason,
+      Description = "", // ✅ use camelCase for consistency
+    } = req.body;
 
     if (!studentId || amountPaid === undefined) {
       return res
@@ -247,6 +273,7 @@ export const createStudentPayment = async (req: Request, res: Response) => {
       const previousAccount = await prisma.studentAccount.findUnique({
         where: { studentId: +studentId },
       });
+
       const previousCarryForward = Number(previousAccount?.carryForward || 0);
 
       // Step 1: Get unpaid fees
@@ -345,7 +372,7 @@ export const createStudentPayment = async (req: Request, res: Response) => {
         year: number;
       }[] = [];
 
-      // Step 4: Allocate (even partial)
+      // Step 4: Allocate fees
       for (const feeRecord of unpaidFees) {
         if (availableAmount <= 0 && remainingDiscount <= 0) break;
 
@@ -356,7 +383,6 @@ export const createStudentPayment = async (req: Request, res: Response) => {
         const paymentToApply = Math.min(due - discountToApply, availableAmount);
         const totalPayment = discountToApply + paymentToApply;
 
-        // ✅ Fixed: allow even small allocations
         if (paymentToApply > 0 || discountToApply > 0) {
           allocations.push({
             studentFeeId: feeRecord.id,
@@ -404,6 +430,7 @@ export const createStudentPayment = async (req: Request, res: Response) => {
           userId: user.useId,
           amountPaid: Number(amountPaid),
           discount: Number(discount),
+          Description, // ✅ saved here
           allocations: { create: allocations },
         },
       });
@@ -1044,48 +1071,102 @@ export const getAllocationsByPayment = async (req: Request, res: Response) => {
   }
 };
 
-// GET /api/payment-allocations
-export const getAllPaymentAllocations = async (
-  _req: Request,
-  res: Response
-) => {
+// GET /api/payment-allocations// controllers/paymentController.ts
+
+// export const getAllPayments = async (_req: Request, res: Response) => {
+//   try {
+//     const rawPayments = await prisma.payment.findMany({
+//       include: {
+//         student: {
+//           select: {
+//             id: true,
+//             fullname: true,
+//           },
+//         },
+//         user: {
+//           select: {
+//             id: true,
+//             fullName: true,
+//             email: true,
+//           },
+//         },
+//         allocations: true,
+//       },
+//       orderBy: {
+//         date: "desc",
+//       },
+//     });
+
+//     // Flatten the structure so frontend receives `fullname` directly
+//     const payments = rawPayments.map((payment) => ({
+//       ...payment,
+//       fullname: payment.student.fullname, // Injected top-level fullname
+//     }));
+
+//     res.status(200).json({
+//       message: "All payments retrieved successfully",
+//       payments,
+//     });
+//   } catch (error) {
+//     console.error("Error fetching payments:", error);
+//     res.status(500).json({
+//       message: "Failed to retrieve payments",
+//       error: error instanceof Error ? error.message : "Unknown error",
+//     });
+//   }
+// };
+export const getAllPayments = async (_req: Request, res: Response) => {
   try {
-    const allocations = await prisma.paymentAllocation.findMany({
+    const payments = await prisma.payment.findMany({
       include: {
-        payment: {
-          select: {
-            id: true,
-            amountPaid: true,
-            discount: true,
-            date: true,
-          },
-        },
-        studentFee: {
-          select: {
-            id: true,
-            month: true,
-            year: true,
-            isPaid: true,
-          },
-        },
-        Student: {
-          select: {
-            id: true,
-            fullname: true,
-          },
-        },
+        student: { select: { id: true, fullname: true } },
+        user: { select: { id: true, fullName: true, email: true } },
+        allocations: true,
       },
       orderBy: {
-        id: "desc",
+        date: "desc",
       },
     });
 
-    res.status(200).json(allocations);
+    // Map payments to include top-level fullname and discount
+    const enhancedPayments = payments.map((p) => ({
+      ...p,
+      fullname: p.student.fullname,
+      discount: p.discount.toString(), // ensure string if Decimal
+    }));
+
+    res.status(200).json({
+      message: "All payments retrieved successfully",
+      payments: enhancedPayments,
+    });
   } catch (error) {
-    console.error("Error fetching payment allocations:", error);
+    console.error("Error fetching payments:", error);
+    res.status(500).json({ message: "Failed to retrieve payments" });
+  }
+};
+
+// controllers/paymentController.ts
+
+export const updatePayment = async (req: Request, res: Response) => {
+  const paymentId = parseInt(req.params.id);
+  const { amountPaid, discount, Description } = req.body;
+
+  try {
+    const updatedPayment = await prisma.payment.update({
+      where: { id: paymentId },
+      data: {
+        amountPaid,
+        discount,
+        Description,
+      },
+    });
+
     res
-      .status(500)
-      .json({ message: "Internal server error fetching allocations" });
+      .status(200)
+      .json({ message: "Payment updated successfully", updatedPayment });
+  } catch (error) {
+    console.error("Error updating payment:", error);
+    res.status(500).json({ message: "Failed to update payment" });
   }
 };
 
@@ -2582,9 +2663,65 @@ export const getStudentsWithUnpaidFeeMonthly = async (
   }
 };
 
+// export const getAllDiscountLogs = async (req: Request, res: Response) => {
+//   try {
+//     const discounts = await prisma.discountLog.findMany({
+//       include: {
+//         student: {
+//           select: {
+//             id: true,
+//             fullname: true,
+//           },
+//         },
+//         approvedUser: {
+//           select: {
+//             id: true,
+//             fullName: true,
+//             email: true,
+//           },
+//         },
+//       },
+//       orderBy: {
+//         createdAt: "desc",
+//       },
+//     });
+
+//     res.status(200).json({
+//       message: "All discount logs retrieved successfully",
+//       discounts,
+//     });
+//   } catch (error) {
+//     console.error("Error fetching all discount logs:", error);
+//     res.status(500).json({
+//       message: "Failed to retrieve discount logs",
+//       error: error instanceof Error ? error.message : "Unknown error",
+//     });
+//   }
+// };
 export const getAllDiscountLogs = async (req: Request, res: Response) => {
   try {
+    const { month, year } = req.query;
+
+    // Build date filter if month and year are provided
+    let whereClause = {};
+
+    if (month && year) {
+      const numericMonth = parseInt(month as string) - 1; // JavaScript Date month is 0-based
+      const numericYear = parseInt(year as string);
+
+      const startDate = new Date(numericYear, numericMonth, 1);
+      const endDate = new Date(numericYear, numericMonth + 1, 1); // First day of next month
+
+      whereClause = {
+        createdAt: {
+          gte: startDate,
+          lt: endDate,
+        },
+      };
+    }
+
     const discounts = await prisma.discountLog.findMany({
+      where: whereClause,
       include: {
         student: {
           select: {
@@ -2606,11 +2743,11 @@ export const getAllDiscountLogs = async (req: Request, res: Response) => {
     });
 
     res.status(200).json({
-      message: "All discount logs retrieved successfully",
+      message: "Filtered discount logs retrieved successfully",
       discounts,
     });
   } catch (error) {
-    console.error("Error fetching all discount logs:", error);
+    console.error("Error fetching filtered discount logs:", error);
     res.status(500).json({
       message: "Failed to retrieve discount logs",
       error: error instanceof Error ? error.message : "Unknown error",

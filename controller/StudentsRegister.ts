@@ -2575,4 +2575,39 @@ export const getStudentsWithSameBus = async (req: Request, res: Response) => {
   }
 };
 
+// GET /api/students/by-parent-phone/:phone
+
+export const getLastStudentByParentPhone = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const phone = req.params.phone;
+
+    const parent = await prisma.user.findFirst({
+      where: { phoneNumber: phone, role: "PARENT" },
+    });
+
+    if (!parent) {
+      return res.status(404).json({ message: "Parent not found" });
+    }
+
+    const lastStudent = await prisma.student.findFirst({
+      where: { parentUserId: parent.id },
+    });
+
+    if (!lastStudent) {
+      return res
+        .status(404)
+        .json({ message: "No students found for this parent" });
+    }
+
+    res.status(200).json({
+      student: lastStudent,
+    });
+  } catch (error) {
+    res.status(500).json({ message: "Server error", error });
+  }
+};
+
 export { upload };

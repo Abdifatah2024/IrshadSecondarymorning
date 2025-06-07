@@ -40,6 +40,7 @@ import {
   getParentStudentAttendance,
   updateStudentParent,
   getStudentsWithSameBus,
+  getLastStudentByParentPhone,
 } from "../controller/StudentsRegister";
 
 import { getYearlyProgressReportByStudent } from "../controller/exam.controller";
@@ -122,5 +123,6 @@ router.get("/students/brothers", authenticate, getBrothersList);
 router.get("/family/by-name", getStudentsByFamilyNameWritten);
 router.put("/student/update-parent", updateStudentParent);
 router.get("/students/same-bus/:bus", getStudentsWithSameBus);
+router.get("/students/by-parent-phone", getLastStudentByParentPhone);
 
 export default router;
