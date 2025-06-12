@@ -11,7 +11,7 @@ const prisma = new PrismaClient();
 //       amountPaid,
 //       discount,
 //       discountReason,
-//       Description = "",
+//       Description = "", // ✅ use camelCase for consistency
 //     } = req.body;
 
 //     if (!studentId || amountPaid === undefined) {
@@ -42,6 +42,7 @@ const prisma = new PrismaClient();
 //       const previousAccount = await prisma.studentAccount.findUnique({
 //         where: { studentId: +studentId },
 //       });
+
 //       const previousCarryForward = Number(previousAccount?.carryForward || 0);
 
 //       // Step 1: Get unpaid fees
@@ -140,7 +141,7 @@ const prisma = new PrismaClient();
 //         year: number;
 //       }[] = [];
 
-//       // Step 4: Allocate (even partial)
+//       // Step 4: Allocate fees
 //       for (const feeRecord of unpaidFees) {
 //         if (availableAmount <= 0 && remainingDiscount <= 0) break;
 
@@ -151,7 +152,6 @@ const prisma = new PrismaClient();
 //         const paymentToApply = Math.min(due - discountToApply, availableAmount);
 //         const totalPayment = discountToApply + paymentToApply;
 
-//         // ✅ Fixed: allow even small allocations
 //         if (paymentToApply > 0 || discountToApply > 0) {
 //           allocations.push({
 //             studentFeeId: feeRecord.id,
@@ -199,6 +199,7 @@ const prisma = new PrismaClient();
 //           userId: user.useId,
 //           amountPaid: Number(amountPaid),
 //           discount: Number(discount),
+//           Description, // ✅ saved here
 //           allocations: { create: allocations },
 //         },
 //       });
@@ -235,6 +236,11 @@ const prisma = new PrismaClient();
 //   }
 // };
 
+interface AuthUser {
+  userId: number;
+  Role?: string;
+}
+
 export const createStudentPayment = async (req: Request, res: Response) => {
   try {
     const {
@@ -242,22 +248,29 @@ export const createStudentPayment = async (req: Request, res: Response) => {
       amountPaid,
       discount,
       discountReason,
-      Description = "", // ✅ use camelCase for consistency
+      description = "",
     } = req.body;
 
     if (!studentId || amountPaid === undefined) {
-      return res
-        .status(400)
-        .json({ message: "studentId and amountPaid are required" });
+      return res.status(400).json({
+        message: "studentId and amountPaid are required",
+      });
     }
 
     if (Number(discount) < 0) {
-      return res.status(400).json({ message: "Discount cannot be negative" });
+      return res.status(400).json({
+        message: "Discount cannot be negative",
+      });
     }
 
-    // @ts-ignore
-    const user = req.user;
+    // @ts-ignore - since middleware isn't typed
+    const user = req.user as { useId: number; role?: string };
 
+    if (user?.role !== "ADMIN" && user?.role !== "USER") {
+      return res.status(403).json({
+        message: `Access denied, not allowed By: ${user?.role || "UNKNOWN"}`,
+      });
+    }
     await prisma.$transaction(async (prisma) => {
       const student = await prisma.student.findUnique({
         where: { id: +studentId },
@@ -276,7 +289,6 @@ export const createStudentPayment = async (req: Request, res: Response) => {
 
       const previousCarryForward = Number(previousAccount?.carryForward || 0);
 
-      // Step 1: Get unpaid fees
       let unpaidFees = await prisma.studentFee.findMany({
         where: {
           studentId: +studentId,
@@ -290,13 +302,11 @@ export const createStudentPayment = async (req: Request, res: Response) => {
       );
 
       let totalAvailable = Number(amountPaid) + previousCarryForward;
-
       const estimatedMonths =
         totalAvailable < feeAmount ? 1 : Math.ceil(totalAvailable / feeAmount);
 
       let lastDate = new Date(currentYear, currentMonth - 1, 1);
 
-      // Step 2: Create missing months (via upsert)
       for (let i = 0; i < estimatedMonths; i++) {
         const month = lastDate.getMonth() + 1;
         const year = lastDate.getFullYear();
@@ -331,7 +341,6 @@ export const createStudentPayment = async (req: Request, res: Response) => {
         a.year === b.year ? a.month - b.month : a.year - b.year
       );
 
-      // Step 3: Get current allocations
       const allocationSums = await prisma.paymentAllocation.groupBy({
         by: ["studentFeeId"],
         where: {
@@ -372,7 +381,6 @@ export const createStudentPayment = async (req: Request, res: Response) => {
         year: number;
       }[] = [];
 
-      // Step 4: Allocate fees
       for (const feeRecord of unpaidFees) {
         if (availableAmount <= 0 && remainingDiscount <= 0) break;
 
@@ -423,14 +431,13 @@ export const createStudentPayment = async (req: Request, res: Response) => {
         }
       }
 
-      // Step 5: Save payment
       const newPayment = await prisma.payment.create({
         data: {
           studentId: +studentId,
           userId: user.useId,
           amountPaid: Number(amountPaid),
           discount: Number(discount),
-          Description, // ✅ saved here
+          Description: description,
           allocations: { create: allocations },
         },
       });
@@ -439,7 +446,6 @@ export const createStudentPayment = async (req: Request, res: Response) => {
         await prisma.discountLog.createMany({ data: discountRecords });
       }
 
-      // Step 6: Update carry forward
       await prisma.studentAccount.upsert({
         where: { studentId: +studentId },
         update: { carryForward: availableAmount },
@@ -2663,7 +2669,6 @@ export const getStudentsWithUnpaidFeeMonthly = async (
   }
 };
 
-// export const getAllDiscountLogs = async (req: Request, res: Response) => {
 //   try {
 //     const discounts = await prisma.discountLog.findMany({
 //       include: {

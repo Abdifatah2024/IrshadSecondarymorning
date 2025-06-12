@@ -443,25 +443,138 @@ export const getUserProfile = async (req: Request, res: Response) => {
 // ─────────────────────────────────────────────────────
 // Upload Config
 // ─────────────────────────────────────────────────────
+// const storage = multer.diskStorage({
+//   destination: "uploads/",
+//   filename: (req, file, cb) => {
+//     const uniqueSuffix = uuidv4();
+//     const ext = path.extname(file.originalname);
+//     cb(null, `user-${uniqueSuffix}${ext}`);
+//   },
+// });
+
+// const fileFilter = (req: any, file: any, cb: any) => {
+//   if (file.mimetype.startsWith("image")) cb(null, true);
+//   else cb(new Error("Only image files are allowed!"), false);
+// };
+
+// export const upload = multer({
+//   storage,
+//   limits: { fileSize: 5 * 1024 * 1024 },
+//   fileFilter,
+// });
 const storage = multer.diskStorage({
-  destination: "uploads/",
-  filename: (req, file, cb) => {
+  destination: function (_req, _file, cb) {
+    cb(null, "uploads/");
+  },
+  filename: function (_req, file, cb) {
     const uniqueSuffix = uuidv4();
     const ext = path.extname(file.originalname);
-    cb(null, `user-${uniqueSuffix}${ext}`);
+    cb(null, `${file.fieldname}-${uniqueSuffix}${ext}`);
   },
 });
 
-const fileFilter = (req: any, file: any, cb: any) => {
-  if (file.mimetype.startsWith("image")) cb(null, true);
-  else cb(new Error("Only image files are allowed!"), false);
+// ─────────────────────────────────────────────────────
+// Image File Filter
+// ─────────────────────────────────────────────────────
+const imageFileFilter = (
+  req: any,
+  file: Express.Multer.File,
+  cb: multer.FileFilterCallback
+) => {
+  if (file.mimetype.startsWith("image/")) {
+    cb(null, true);
+  } else {
+    cb(new Error("Only image files are allowed!"));
+  }
 };
 
-export const upload = multer({
+// ─────────────────────────────────────────────────────
+// PDF File Filter
+// ─────────────────────────────────────────────────────
+const pdfFileFilter = (
+  req: any,
+  file: Express.Multer.File,
+  cb: multer.FileFilterCallback
+) => {
+  if (file.mimetype === "application/pdf") {
+    cb(null, true);
+  } else {
+    cb(new Error("Only PDF files are allowed!"));
+  }
+};
+
+// ─────────────────────────────────────────────────────
+// Multer Uploads
+// ─────────────────────────────────────────────────────
+export const uploadImage = multer({
   storage,
-  limits: { fileSize: 5 * 1024 * 1024 },
-  fileFilter,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max for images
+  fileFilter: imageFileFilter,
 });
+
+export const uploadPdf = multer({
+  storage,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB max for PDFs
+  fileFilter: pdfFileFilter,
+});
+
+//pdf file
+export const uploadPdfFile = async (req: Request, res: Response) => {
+  try {
+    const file = req.file;
+
+    if (!file) {
+      return res.status(400).json({ message: "No file uploaded" });
+    }
+
+    const title = req.body.title || file.originalname;
+    const fileUrl = `${req.protocol}://${req.get("host")}/uploads/${
+      file.filename
+    }`;
+
+    // If you’re using auth middleware
+    // @ts-ignore
+    const userId = req.user?.useId || 1; // fallback for testing/dev
+
+    const savedDocument = await prisma.document.create({
+      data: {
+        title,
+        fileName: file.originalname,
+        fileUrl,
+        uploadedById: userId,
+      },
+    });
+
+    return res.status(201).json({
+      message: "PDF uploaded and saved",
+      document: savedDocument,
+    });
+  } catch (error) {
+    console.error("PDF upload error:", error);
+    return res.status(500).json({ message: "Failed to upload PDF" });
+  }
+};
+
+export const getAllDocuments = async (_req: Request, res: Response) => {
+  try {
+    const docs = await prisma.document.findMany({
+      include: {
+        uploadedBy: {
+          select: {
+            id: true,
+            username: true,
+          },
+        },
+      },
+      orderBy: { uploadedAt: "desc" },
+    });
+
+    res.status(200).json({ documents: docs });
+  } catch (error) {
+    console.error("List documents error:", error);
+    res.status(500).json({ message: "Failed to fetch documents" });
+  }
+};
 
 // ─────────────────────────────────────────────────────
 // Upload User Photo (Authenticated User)
@@ -525,6 +638,46 @@ export const uploadPhoto = async (req: Request, res: Response) => {
     res.status(500).json({ error: "Failed to upload photo" });
   }
 };
+export const deleteUserDocument = async (req: Request, res: Response) => {
+  try {
+    // @ts-ignore
+    const user = req.user;
+    const userId = user?.useId;
+    const docId = parseInt(req.params.id);
+
+    if (!userId) {
+      return res.status(401).json({ message: "Authentication required" });
+    }
+
+    if (isNaN(docId)) {
+      return res.status(400).json({ message: "Invalid document ID" });
+    }
+
+    // Verify the document belongs to the authenticated user
+    const document = await prisma.document.findUnique({
+      where: { id: docId },
+    });
+
+    if (!document || document.uploadedById !== userId) {
+      return res
+        .status(404)
+        .json({ message: "Document not found or unauthorized" });
+    }
+
+    // Delete from database
+    await prisma.document.delete({ where: { id: docId } });
+
+    res
+      .status(200)
+      .json({ status: "success", message: "Document deleted successfully" });
+  } catch (error) {
+    console.error("Delete error:", error);
+    res
+      .status(500)
+      .json({ status: "error", message: "Failed to delete document" });
+  }
+};
+
 // create Employee
 export const createEmployee = async (req: Request, res: Response) => {
   try {
@@ -972,5 +1125,59 @@ export const resetPasswordWithToken = async (req: Request, res: Response) => {
   } catch (error) {
     console.error("Password reset error:", error);
     res.status(500).json({ message: "Server error" });
+  }
+};
+
+export const updateUserRole = async (req: Request, res: Response) => {
+  try {
+    // @ts-ignore — user injected by auth middleware
+    const currentUser = req.user;
+
+    if (!currentUser || currentUser.role !== "ADMIN") {
+      return res.status(403).json({ message: "Only ADMIN can update roles." });
+    }
+
+    const userId = parseInt(req.params.id);
+    const { role: newRole } = req.body;
+
+    if (isNaN(userId)) {
+      return res.status(400).json({ message: "Invalid user ID." });
+    }
+
+    if (!["ADMIN", "USER"].includes(newRole)) {
+      return res
+        .status(400)
+        .json({ message: "Role can only be changed to ADMIN or USER." });
+    }
+
+    const targetUser = await prisma.user.findUnique({ where: { id: userId } });
+
+    if (!targetUser) {
+      return res.status(404).json({ message: "Target user not found." });
+    }
+
+    // ✅ Only allow updating users whose current role is exactly "USER"
+    // if (targetUser.role !== "USER") {
+    //   return res.status(403).json({
+    //     message: `Cannot change role of a ${targetUser.role} user.`,
+    //   });
+    // }
+
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data: { role: newRole },
+    });
+
+    return res.status(200).json({
+      message: "User role updated successfully.",
+      user: {
+        id: updatedUser.id,
+        username: updatedUser.username,
+        role: updatedUser.role,
+      },
+    });
+  } catch (error) {
+    console.error("Error updating role:", error);
+    return res.status(500).json({ message: "Server error." });
   }
 };

@@ -26,6 +26,7 @@ import {
   deleteExamScore,
   updateTenSubjects,
   getStudentExamScores,
+  getParentStudentExamSummary,
 } from "../controller/exam.controller";
 import {
   assignTeacherToClassSubject,
@@ -108,5 +109,6 @@ router.get(
 );
 router.get("/me/correction-limit", authenticate, getMyCorrectionLimit);
 router.get("/dashboard-data", authenticate, getTeacherDashboardData);
+router.get("/summary/parent", authenticate, getParentStudentExamSummary);
 
 export default router;

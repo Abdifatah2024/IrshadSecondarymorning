@@ -3,6 +3,7 @@ import {
   createEmployeeAdvanceAndUpdateIncome,
   deleteEmployeeAdvance,
   getEmployeeAdvances,
+  getEmployeeAdvancesDetail,
   getEmployeeSalaryAdvanceBalance,
   getMonthlyIncomeOverview,
   updateEmployeeAdvance,
@@ -24,5 +25,5 @@ router.put("/employee-advances/:id", authenticate, updateEmployeeAdvance);
 // DELETE /api/employee-advances/:id
 router.delete("/employee-advances/:id", authenticate, deleteEmployeeAdvance);
 router.get("/employee-balance", getEmployeeSalaryAdvanceBalance);
-
+router.get("/employee-advanceDetail", getEmployeeAdvancesDetail);
 export default router;

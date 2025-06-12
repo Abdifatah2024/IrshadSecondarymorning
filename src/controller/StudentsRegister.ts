@@ -2611,3 +2611,115 @@ export const getLastStudentByParentPhone = async (
 };
 
 export { upload };
+
+export const getStudentsWithBus = async (req: Request, res: Response) => {
+  try {
+    const schoolFee = 28;
+
+    const students = await prisma.student.findMany({
+      where: {
+        isdeleted: false,
+        AND: [{ bus: { not: null } }, { bus: { not: "" } }],
+      },
+      select: {
+        id: true,
+        fullname: true,
+        fee: true,
+        bus: true,
+        classId: true,
+        classes: {
+          select: {
+            name: true,
+          },
+        },
+      },
+      orderBy: {
+        fullname: "asc",
+      },
+    });
+
+    const enrichedStudents = students.map((student) => {
+      const totalFee = Number(student.fee) || 0;
+      const busFee = totalFee > schoolFee ? totalFee - schoolFee : 0;
+
+      return {
+        ...student,
+        totalFee,
+        schoolFee,
+        busFee,
+      };
+    });
+
+    const uniqueStudents = enrichedStudents.filter(
+      (student, index, self) =>
+        index === self.findIndex((s) => s.id === student.id)
+    );
+
+    res.status(200).json({
+      success: true,
+      count: uniqueStudents.length,
+      students: uniqueStudents,
+    });
+  } catch (error) {
+    console.error("Error fetching students with bus:", error);
+    res.status(500).json({
+      message: "Server error while fetching students with bus",
+    });
+  }
+};
+
+export const getStudentsWithoutBus = async (req: Request, res: Response) => {
+  try {
+    const schoolFee = 28;
+
+    const students = await prisma.student.findMany({
+      where: {
+        OR: [{ bus: null }, { bus: "" }],
+        isdeleted: false,
+      },
+      select: {
+        id: true,
+        fullname: true,
+        fee: true,
+        bus: true,
+        classId: true,
+        classes: {
+          select: {
+            name: true,
+          },
+        },
+      },
+      orderBy: {
+        fullname: "asc",
+      },
+    });
+
+    const enrichedStudents = students.map((student) => {
+      const totalFee = Number(student.fee) || 0;
+
+      return {
+        ...student,
+        totalFee,
+        schoolFee,
+        busFee: 0,
+      };
+    });
+
+    // Deduplicate just in case
+    const uniqueStudents = enrichedStudents.filter(
+      (student, index, self) =>
+        index === self.findIndex((s) => s.id === student.id)
+    );
+
+    res.status(200).json({
+      success: true,
+      count: uniqueStudents.length,
+      students: uniqueStudents,
+    });
+  } catch (error) {
+    console.error("Error fetching students without bus:", error);
+    res.status(500).json({
+      message: "Server error while fetching students without bus",
+    });
+  }
+};

@@ -12,6 +12,8 @@ import AdvanceRouter from "./routes/EmployeeAdvanceRoute";
 import expenseRoutes from "./routes/expenseRoutes";
 import FinanacialRoutes from "./routes/financialReports";
 import cors from "cors";
+import path from "path";
+
 // import morgan from "morgan";
 const app = express();
 
@@ -47,6 +49,14 @@ app.use("/fee", FeeRouter);
 app.use("/EmployeeAdvance", AdvanceRouter);
 app.use("/expenses", expenseRoutes);
 app.use("/financial/Reports", FinanacialRoutes);
+app.use(
+  "/uploads",
+  express.static(path.join(__dirname, "../uploads"), {
+    setHeaders: (res, filePath) => {
+      res.set("Cross-Origin-Resource-Policy", "cross-origin");
+    },
+  })
+);
 
 // Fix 3: Add error handling middleware
 app.use(

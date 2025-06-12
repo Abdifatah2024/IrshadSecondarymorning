@@ -12,216 +12,26 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.getAllDiscountLogs = exports.getStudentsWithUnpaidFeeMonthly = exports.getTodayIncome = exports.getCombinedPayments = exports.getAllStudentAccountSummaries = exports.getStudentDepositStatus = exports.getAllGeneratedMonths = exports.deleteStudentFeesByMonth = exports.getMonthlyIncomeOverview = exports.getStudentsWithUnpaidFeesOrBalance = exports.listDiscounts = exports.verifyDiscount = exports.getFeeInconsistencies = exports.updatePayment = exports.getAllPayments = exports.getAllocationsByPayment = exports.getStudentBalanceSummary = exports.getPaymentHistory = exports.getStudentFees = exports.generateMonthlyFees = exports.createMultiStudentPayment = exports.createStudentPayment = void 0;
 const client_1 = require("@prisma/client");
 const prisma = new client_1.PrismaClient();
-// POST /api/payment
-// export const createStudentPayment = async (req: Request, res: Response) => {
-//   try {
-//     const {
-//       studentId,
-//       amountPaid,
-//       discount,
-//       discountReason,
-//       Description = "",
-//     } = req.body;
-//     if (!studentId || amountPaid === undefined) {
-//       return res
-//         .status(400)
-//         .json({ message: "studentId and amountPaid are required" });
-//     }
-//     if (Number(discount) < 0) {
-//       return res.status(400).json({ message: "Discount cannot be negative" });
-//     }
-//     // @ts-ignore
-//     const user = req.user;
-//     await prisma.$transaction(async (prisma) => {
-//       const student = await prisma.student.findUnique({
-//         where: { id: +studentId },
-//       });
-//       if (!student) throw new Error("Student not found");
-//       const feeAmount = Number(student.fee);
-//       const today = new Date();
-//       const currentMonth = today.getMonth() + 1;
-//       const currentYear = today.getFullYear();
-//       const previousAccount = await prisma.studentAccount.findUnique({
-//         where: { studentId: +studentId },
-//       });
-//       const previousCarryForward = Number(previousAccount?.carryForward || 0);
-//       // Step 1: Get unpaid fees
-//       let unpaidFees = await prisma.studentFee.findMany({
-//         where: {
-//           studentId: +studentId,
-//           isPaid: false,
-//         },
-//         orderBy: [{ year: "asc" }, { month: "asc" }],
-//       });
-//       const existingKeys = new Set(
-//         unpaidFees.map((f) => `${f.year}-${f.month}`)
-//       );
-//       let totalAvailable = Number(amountPaid) + previousCarryForward;
-//       const estimatedMonths =
-//         totalAvailable < feeAmount ? 1 : Math.ceil(totalAvailable / feeAmount);
-//       let lastDate = new Date(currentYear, currentMonth - 1, 1);
-//       // Step 2: Create missing months (via upsert)
-//       for (let i = 0; i < estimatedMonths; i++) {
-//         const month = lastDate.getMonth() + 1;
-//         const year = lastDate.getFullYear();
-//         const key = `${year}-${month}`;
-//         if (!existingKeys.has(key)) {
-//           const newOrExisting = await prisma.studentFee.upsert({
-//             where: {
-//               studentId_month_year: {
-//                 studentId: +studentId,
-//                 month,
-//                 year,
-//               },
-//             },
-//             update: {},
-//             create: {
-//               studentId: +studentId,
-//               month,
-//               year,
-//               isPaid: false,
-//             },
-//           });
-//           unpaidFees.push(newOrExisting);
-//           existingKeys.add(key);
-//         }
-//         lastDate.setMonth(lastDate.getMonth() + 1);
-//       }
-//       unpaidFees.sort((a, b) =>
-//         a.year === b.year ? a.month - b.month : a.year - b.year
-//       );
-//       // Step 3: Get current allocations
-//       const allocationSums = await prisma.paymentAllocation.groupBy({
-//         by: ["studentFeeId"],
-//         where: {
-//           studentFeeId: { in: unpaidFees.map((f) => f.id) },
-//         },
-//         _sum: { amount: true },
-//       });
-//       const paidMap = new Map(
-//         allocationSums.map((a) => [a.studentFeeId, Number(a._sum.amount || 0)])
-//       );
-//       let availableAmount = Number(amountPaid) + previousCarryForward;
-//       let remainingDiscount = Number(discount);
-//       const allocations: {
-//         studentFeeId: number;
-//         amount: number;
-//         studentId: number;
-//       }[] = [];
-//       const discountRecords: {
-//         studentFeeId: number;
-//         studentId: number;
-//         amount: number;
-//         reason: string;
-//         month: number;
-//         year: number;
-//         approvedBy: number;
-//       }[] = [];
-//       const detailedAllocations: {
-//         studentFeeId: number;
-//         total: number;
-//         paid: number;
-//         discount: number;
-//         month: number;
-//         year: number;
-//       }[] = [];
-//       // Step 4: Allocate (even partial)
-//       for (const feeRecord of unpaidFees) {
-//         if (availableAmount <= 0 && remainingDiscount <= 0) break;
-//         const paidSoFar = paidMap.get(feeRecord.id) || 0;
-//         const due = feeAmount - paidSoFar;
-//         const discountToApply = Math.min(remainingDiscount, due);
-//         const paymentToApply = Math.min(due - discountToApply, availableAmount);
-//         const totalPayment = discountToApply + paymentToApply;
-//         // ✅ Fixed: allow even small allocations
-//         if (paymentToApply > 0 || discountToApply > 0) {
-//           allocations.push({
-//             studentFeeId: feeRecord.id,
-//             amount: totalPayment,
-//             studentId: +studentId,
-//           });
-//           detailedAllocations.push({
-//             studentFeeId: feeRecord.id,
-//             total: totalPayment,
-//             paid: paymentToApply,
-//             discount: discountToApply,
-//             month: feeRecord.month,
-//             year: feeRecord.year,
-//           });
-//           if (discountToApply > 0) {
-//             discountRecords.push({
-//               studentFeeId: feeRecord.id,
-//               studentId: +studentId,
-//               amount: discountToApply,
-//               reason: discountReason,
-//               month: feeRecord.month,
-//               year: feeRecord.year,
-//               approvedBy: user.useId,
-//             });
-//             remainingDiscount -= discountToApply;
-//           }
-//           availableAmount -= paymentToApply;
-//           if (paidSoFar + totalPayment >= feeAmount) {
-//             await prisma.studentFee.update({
-//               where: { id: feeRecord.id },
-//               data: { isPaid: true },
-//             });
-//           }
-//         }
-//       }
-//       // Step 5: Save payment
-//       const newPayment = await prisma.payment.create({
-//         data: {
-//           studentId: +studentId,
-//           userId: user.useId,
-//           amountPaid: Number(amountPaid),
-//           discount: Number(discount),
-//           allocations: { create: allocations },
-//         },
-//       });
-//       if (discountRecords.length > 0) {
-//         await prisma.discountLog.createMany({ data: discountRecords });
-//       }
-//       // Step 6: Update carry forward
-//       await prisma.studentAccount.upsert({
-//         where: { studentId: +studentId },
-//         update: { carryForward: availableAmount },
-//         create: {
-//           studentId: +studentId,
-//           carryForward: availableAmount,
-//         },
-//       });
-//       res.status(201).json({
-//         message: "Payment processed successfully",
-//         payment: newPayment,
-//         StudentName: student.fullname,
-//         carryForward: availableAmount,
-//         allocations: detailedAllocations,
-//         appliedDiscounts: discountRecords,
-//       });
-//     });
-//   } catch (error) {
-//     console.error("Error processing payment:", error);
-//     res.status(500).json({
-//       message: "Internal server error while processing payment",
-//       error: error instanceof Error ? error.message : "Unknown error",
-//     });
-//   }
-// };
 const createStudentPayment = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const { studentId, amountPaid, discount, discountReason, Description = "", // ✅ use camelCase for consistency
-         } = req.body;
+        const { studentId, amountPaid, discount, discountReason, description = "", } = req.body;
         if (!studentId || amountPaid === undefined) {
-            return res
-                .status(400)
-                .json({ message: "studentId and amountPaid are required" });
+            return res.status(400).json({
+                message: "studentId and amountPaid are required",
+            });
         }
         if (Number(discount) < 0) {
-            return res.status(400).json({ message: "Discount cannot be negative" });
+            return res.status(400).json({
+                message: "Discount cannot be negative",
+            });
         }
-        // @ts-ignore
+        // @ts-ignore - since middleware isn't typed
         const user = req.user;
+        if ((user === null || user === void 0 ? void 0 : user.role) !== "ADMIN" && (user === null || user === void 0 ? void 0 : user.role) !== "USER") {
+            return res.status(403).json({
+                message: `Access denied, not allowed By: ${(user === null || user === void 0 ? void 0 : user.role) || "UNKNOWN"}`,
+            });
+        }
         yield prisma.$transaction((prisma) => __awaiter(void 0, void 0, void 0, function* () {
             const student = yield prisma.student.findUnique({
                 where: { id: +studentId },
@@ -236,7 +46,6 @@ const createStudentPayment = (req, res) => __awaiter(void 0, void 0, void 0, fun
                 where: { studentId: +studentId },
             });
             const previousCarryForward = Number((previousAccount === null || previousAccount === void 0 ? void 0 : previousAccount.carryForward) || 0);
-            // Step 1: Get unpaid fees
             let unpaidFees = yield prisma.studentFee.findMany({
                 where: {
                     studentId: +studentId,
@@ -248,7 +57,6 @@ const createStudentPayment = (req, res) => __awaiter(void 0, void 0, void 0, fun
             let totalAvailable = Number(amountPaid) + previousCarryForward;
             const estimatedMonths = totalAvailable < feeAmount ? 1 : Math.ceil(totalAvailable / feeAmount);
             let lastDate = new Date(currentYear, currentMonth - 1, 1);
-            // Step 2: Create missing months (via upsert)
             for (let i = 0; i < estimatedMonths; i++) {
                 const month = lastDate.getMonth() + 1;
                 const year = lastDate.getFullYear();
@@ -276,7 +84,6 @@ const createStudentPayment = (req, res) => __awaiter(void 0, void 0, void 0, fun
                 lastDate.setMonth(lastDate.getMonth() + 1);
             }
             unpaidFees.sort((a, b) => a.year === b.year ? a.month - b.month : a.year - b.year);
-            // Step 3: Get current allocations
             const allocationSums = yield prisma.paymentAllocation.groupBy({
                 by: ["studentFeeId"],
                 where: {
@@ -290,7 +97,6 @@ const createStudentPayment = (req, res) => __awaiter(void 0, void 0, void 0, fun
             const allocations = [];
             const discountRecords = [];
             const detailedAllocations = [];
-            // Step 4: Allocate fees
             for (const feeRecord of unpaidFees) {
                 if (availableAmount <= 0 && remainingDiscount <= 0)
                     break;
@@ -334,21 +140,19 @@ const createStudentPayment = (req, res) => __awaiter(void 0, void 0, void 0, fun
                     }
                 }
             }
-            // Step 5: Save payment
             const newPayment = yield prisma.payment.create({
                 data: {
                     studentId: +studentId,
                     userId: user.useId,
                     amountPaid: Number(amountPaid),
                     discount: Number(discount),
-                    Description, // ✅ saved here
+                    Description: description,
                     allocations: { create: allocations },
                 },
             });
             if (discountRecords.length > 0) {
                 yield prisma.discountLog.createMany({ data: discountRecords });
             }
-            // Step 6: Update carry forward
             yield prisma.studentAccount.upsert({
                 where: { studentId: +studentId },
                 update: { carryForward: availableAmount },

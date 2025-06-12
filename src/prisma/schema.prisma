@@ -21,6 +21,7 @@ enum Role {
   USER
   Teacher
   PARENT
+  PENDING
 }
 
 enum StudentStatus {
@@ -83,6 +84,19 @@ model User {
   EmployeeAdvance   EmployeeAdvance[]
   Expense           Expense[]
   DiscountLog       DiscountLog[]
+  Document          Document[]
+}
+
+model Document {
+  id           Int      @id @default(autoincrement())
+  title        String
+  fileName     String
+  fileUrl      String
+  uploadedAt   DateTime @default(now())
+  uploadedBy   User     @relation(fields: [uploadedById], references: [id])
+  uploadedById Int
+
+  @@map("documents") // Optional: name of the DB table
 }
 
 model note {
@@ -116,47 +130,6 @@ model classes {
   TeacherClass      TeacherClass[]
 }
 
-// model Student {
-//   id              Int            @id @default(autoincrement())
-//   firstname       String
-//   middlename      String
-//   lastname        String
-//   fourtname       String?        @default("Fourt name") // ✅ Add this line
-//   fullname        String
-//   classId         Int
-//   phone           String
-//   phone2          String?
-//   bus             String?
-//   address         String?
-//   previousSchool  String?
-//   motherName      String?
-//   gender          String?
-//   Age             Int
-//   fee             Decimal
-//   familyName      String? // ✅ Add this
-//   status          StudentStatus? @default(ACTIVE)
-//   absentCount     Int?           @default(0)
-//   lastWarningDate DateTime?
-//   isdeleted       Boolean        @default(false)
-
-//   // ✅ Relation to creator
-//   userid Int
-//   user   User @relation(fields: [userid], references: [id])
-
-//   // ✅ Relation to parent
-//   parentUserId Int?
-//   parentUser   User? @relation("ParentRelation", fields: [parentUserId], references: [id])
-
-//   // Other relations...
-//   classes           classes             @relation(fields: [classId], references: [id])
-//   Discipline        Discipline[]
-//   PaymentAllocation PaymentAllocation[]
-//   Payment           Payment[]
-//   Attendance        Attendance[]
-//   Score             Score[]
-//   StudentFee        StudentFee[]
-//   StudentAccount    StudentAccount?
-// }
 model Student {
   id                 Int                 @id @default(autoincrement())
   firstname          String

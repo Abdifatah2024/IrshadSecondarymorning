@@ -26,6 +26,11 @@ import {
   getMyStudents,
   requestPasswordReset,
   resetPasswordWithToken,
+  updateUserRole,
+  uploadPdf,
+  uploadPdfFile,
+  getAllDocuments,
+  deleteUserDocument,
 } from "../controller/user.controller";
 
 import {
@@ -73,5 +78,9 @@ router.get("/my", authenticate, getMyStudents);
 router.get("/parents", listParentUsers); // GET /api/users/parents
 router.post("/password-reset/request", requestPasswordReset);
 router.post("/password-reset/confirm", resetPasswordWithToken);
+router.put("/users/:id/role", authenticate, updateUserRole);
+router.post("/upload-pdf", uploadPdf.single("pdf"), uploadPdfFile);
+router.get("/documents", getAllDocuments);
+router.delete("/documents/:id", authenticate, deleteUserDocument);
 
 export default router;

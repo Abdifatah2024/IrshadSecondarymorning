@@ -2,168 +2,6 @@ import { PrismaClient, Role, User } from "@prisma/client";
 import { Request, Response } from "express";
 const prisma = new PrismaClient();
 
-// export const createEmployeeAdvanceAndUpdateIncome = async (
-//   req: Request,
-//   res: Response
-// ) => {
-//   try {
-//     const { amount, reason, month, year } = req.body;
-//     const employeeId = Number(req.params.id);
-//     //@ts-ignore
-//     const user = req.user as { useId: number };
-
-//     if (!employeeId || !amount || !month || !year) {
-//       return res.status(400).json({ message: "Missing required fields" });
-//     }
-
-//     await prisma.$transaction(async (tx) => {
-//       const startDate = new Date(year, month - 1, 1);
-//       const endDate = new Date(year, month, 0, 23, 59, 59, 999);
-
-//       // ✅ 1. Get total income from Payment.amountPaid (not from allocations)
-//       const payments = await tx.payment.findMany({
-//         where: {
-//           date: {
-//             gte: startDate,
-//             lte: endDate,
-//           },
-//         },
-//         select: { amountPaid: true },
-//       });
-
-//       const totalIncome = payments.reduce(
-//         (sum, p) => sum + Number(p.amountPaid),
-//         0
-//       );
-
-//       // 2. Get total advances for the month
-//       const existingAdvances = await tx.employeeAdvance.findMany({
-//         where: { month, year },
-//         select: { amount: true },
-//       });
-
-//       const totalAdvance = existingAdvances.reduce(
-//         (sum, adv) => sum + Number(adv.amount),
-//         0
-//       );
-
-//       // 3. Get total expenses for the month
-//       const expenses = await tx.expense.findMany({
-//         where: {
-//           date: {
-//             gte: startDate,
-//             lte: endDate,
-//           },
-//         },
-//         select: { amount: true },
-//       });
-
-//       const totalExpense = expenses.reduce(
-//         (sum, exp) => sum + Number(exp.amount),
-//         0
-//       );
-
-//       const alreadyUsed = totalAdvance + totalExpense;
-//       const remainingIncome = totalIncome - alreadyUsed;
-
-//       if (Number(amount) > remainingIncome) {
-//         return res.status(400).json({
-//           message: `Advance denied. Remaining income: $${remainingIncome}, requested: $${amount}`,
-//           breakdown: {
-//             totalIncome,
-//             totalAdvance,
-//             totalExpense,
-//             alreadyUsed,
-//             remainingIncome,
-//           },
-//         });
-//       }
-
-//       // 4. Create the advance
-//       const advance = await tx.employeeAdvance.create({
-//         data: {
-//           employeeId,
-//           amount,
-//           reason,
-//           month,
-//           year,
-//           createdById: user.useId,
-//         },
-//       });
-
-//       const updatedTotalAdvance = totalAdvance + Number(amount);
-//       const updatedUsed = updatedTotalAdvance + totalExpense;
-//       const updatedRemaining = totalIncome - updatedUsed;
-
-//       res.status(201).json({
-//         message: "Advance recorded successfully",
-//         advance,
-//         financialSummary: {
-//           totalIncome,
-//           totalAdvance: updatedTotalAdvance,
-//           totalExpense,
-//           used: updatedUsed,
-//           remaining: updatedRemaining,
-//         },
-//       });
-//     });
-//   } catch (error) {
-//     console.error("Error creating advance:", error);
-//     res.status(500).json({ message: "Internal server error" });
-//   }
-// };
-
-// GET /api/employee-advances?employeeId=2&month=5&year=2025
-
-// export const getEmployeeAdvances = async (req: Request, res: Response) => {
-//   try {
-//     const employeeId = req.query.employeeId
-//       ? Number(req.query.employeeId)
-//       : undefined;
-//     const month = req.query.month ? Number(req.query.month) : undefined;
-//     const year = req.query.year ? Number(req.query.year) : undefined;
-
-//     const where: any = {};
-//     if (employeeId) where.employeeId = employeeId;
-//     if (month) where.month = month;
-//     if (year) where.year = year;
-
-//     const advances = await prisma.employeeAdvance.findMany({
-//       where,
-//       orderBy: { dateIssued: "desc" },
-//       include: {
-//         employee: {
-//           select: { fullName: true, phone: true },
-//         },
-//         createdBy: {
-//           select: { fullName: true },
-//         },
-//       },
-//     });
-
-//     const totalAdvance = advances.reduce((sum, a) => sum + a.amount, 0);
-
-//     const summary =
-//       advances.length > 0
-//         ? {
-//             employeeName: advances[0].employee.fullName,
-//             totalAdvance,
-//             numberOfAdvances: advances.length,
-//           }
-//         : null;
-
-//     res.status(200).json({
-//       count: advances.length,
-//       filters: { employeeId, month, year },
-//       summary,
-//       advances,
-//     });
-//   } catch (error) {
-//     console.error("Error fetching employee advances:", error);
-//     res.status(500).json({ message: "Internal server error" });
-//   }
-// };
-
 export const createEmployeeAdvanceAndUpdateIncome = async (
   req: Request,
   res: Response
@@ -687,6 +525,76 @@ export const getAllEmployeesAdnace = async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error("Error fetching employees:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+export const getEmployeeAdvancesDetail = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const employeeId = req.query.employeeId
+      ? Number(req.query.employeeId)
+      : undefined;
+    const employeeName = req.query.employeeName?.toString().toLowerCase();
+    const month = req.query.month ? Number(req.query.month) : undefined;
+    const year = req.query.year ? Number(req.query.year) : undefined;
+
+    const where: any = {};
+
+    if (employeeId) {
+      where.employeeId = employeeId;
+    }
+
+    if (month) where.month = month;
+    if (year) where.year = year;
+
+    // If name is given (and no ID), search by name
+    if (!employeeId && employeeName) {
+      where.employee = {
+        fullName: {
+          contains: employeeName,
+          mode: "insensitive",
+        },
+      };
+    }
+
+    const advances = await prisma.employeeAdvance.findMany({
+      where,
+      orderBy: { dateIssued: "desc" },
+      include: {
+        employee: {
+          select: { fullName: true, phone: true },
+        },
+        createdBy: {
+          select: { fullName: true },
+        },
+      },
+    });
+
+    const totalAdvance = advances.reduce((sum, a) => sum + a.amount, 0);
+
+    const summary1 = {
+      totalAdvance,
+      advancesBy: advances.length > 0 ? advances[0].createdBy.fullName : null,
+      employee:
+        advances.length > 0
+          ? {
+              name: advances[0].employee.fullName,
+              phone: advances[0].employee.phone,
+            }
+          : null,
+    };
+
+    res.status(200).json({
+      count: advances.length,
+      filters: { employeeId, employeeName, month, year },
+      summary1,
+      advances,
+    });
+  } catch (error) {
+    console.error("Error fetching employee advances:", error);
     res.status(500).json({ message: "Internal server error" });
   }
 };

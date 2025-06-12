@@ -1339,3 +1339,102 @@ export const getStudentExamScores = async (req: Request, res: Response) => {
     res.status(500).json({ message: "Internal server error" });
   }
 };
+
+export const getParentStudentExamSummary = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    // @ts-ignore
+    const user = req.user.useId;
+
+    // if (!user || user.Role !== "PARENT") {
+    //   return res.status(403).json({
+    //     message: "Access denied. Only parents can access this data.",
+    //   });
+    // }
+
+    const parentUserId = user.useId;
+
+    const students = await prisma.student.findMany({
+      where: {
+        parentUserId,
+        isdeleted: false,
+      },
+      select: {
+        id: true,
+        fullname: true,
+        classes: { select: { name: true } },
+        Score: {
+          select: {
+            marks: true,
+            exam: {
+              select: {
+                type: true,
+              },
+            },
+            subject: {
+              select: {
+                name: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!students.length) {
+      return res.status(404).json({
+        message: "No students found for this parent",
+      });
+    }
+
+    const result = students.map((student) => {
+      const subjectSummary: Record<string, any> = {};
+
+      student.Score.forEach((score) => {
+        const subjectName = score.subject.name;
+        const examType = score.exam?.type;
+
+        if (!subjectSummary[subjectName]) {
+          subjectSummary[subjectName] = {
+            subject: subjectName,
+            monthly: 0,
+            midterm: 0,
+            final: 0,
+            totalMarks: 0,
+          };
+        }
+
+        if (examType === "MONTHLY") {
+          subjectSummary[subjectName].monthly = score.marks;
+        } else if (examType === "MIDTERM") {
+          subjectSummary[subjectName].midterm = score.marks;
+        } else if (examType === "FINAL") {
+          subjectSummary[subjectName].final = score.marks;
+        }
+
+        subjectSummary[subjectName].totalMarks += score.marks;
+      });
+
+      return {
+        id: student.id,
+        fullname: student.fullname,
+        class: student.classes?.name || "N/A",
+        exams: Object.values(subjectSummary),
+      };
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Exam summaries fetched successfully",
+      data: result,
+    });
+  } catch (error) {
+    console.error("Error fetching parent student exam summary:", error);
+    res.status(500).json({
+      message: "Server error while fetching exam summaries",
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+};
