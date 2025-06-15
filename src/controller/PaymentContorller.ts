@@ -241,6 +241,238 @@ interface AuthUser {
   Role?: string;
 }
 
+// export const createStudentPayment = async (req: Request, res: Response) => {
+//   try {
+//     const {
+//       studentId,
+//       amountPaid,
+//       discount,
+//       discountReason,
+//       description = "",
+//     } = req.body;
+
+//     if (!studentId || amountPaid === undefined) {
+//       return res.status(400).json({
+//         message: "studentId and amountPaid are required",
+//       });
+//     }
+
+//     if (Number(discount) < 0) {
+//       return res.status(400).json({
+//         message: "Discount cannot be negative",
+//       });
+//     }
+
+//     // @ts-ignore - since middleware isn't typed
+//     const user = req.user as { useId: number; role?: string };
+
+//     if (user?.role !== "ADMIN" && user?.role !== "USER") {
+//       return res.status(403).json({
+//         message: `Access denied, not allowed By: ${user?.role || "UNKNOWN"}`,
+//       });
+//     }
+//     await prisma.$transaction(async (prisma) => {
+//       const student = await prisma.student.findUnique({
+//         where: { id: +studentId },
+//       });
+
+//       if (!student) throw new Error("Student not found");
+
+//       const feeAmount = Number(student.fee);
+//       const today = new Date();
+//       const currentMonth = today.getMonth() + 1;
+//       const currentYear = today.getFullYear();
+
+//       const previousAccount = await prisma.studentAccount.findUnique({
+//         where: { studentId: +studentId },
+//       });
+
+//       const previousCarryForward = Number(previousAccount?.carryForward || 0);
+
+//       let unpaidFees = await prisma.studentFee.findMany({
+//         where: {
+//           studentId: +studentId,
+//           isPaid: false,
+//         },
+//         orderBy: [{ year: "asc" }, { month: "asc" }],
+//       });
+
+//       const existingKeys = new Set(
+//         unpaidFees.map((f) => `${f.year}-${f.month}`)
+//       );
+
+//       let totalAvailable = Number(amountPaid) + previousCarryForward;
+//       const estimatedMonths =
+//         totalAvailable < feeAmount ? 1 : Math.ceil(totalAvailable / feeAmount);
+
+//       let lastDate = new Date(currentYear, currentMonth - 1, 1);
+
+//       for (let i = 0; i < estimatedMonths; i++) {
+//         const month = lastDate.getMonth() + 1;
+//         const year = lastDate.getFullYear();
+//         const key = `${year}-${month}`;
+
+//         if (!existingKeys.has(key)) {
+//           const newOrExisting = await prisma.studentFee.upsert({
+//             where: {
+//               studentId_month_year: {
+//                 studentId: +studentId,
+//                 month,
+//                 year,
+//               },
+//             },
+//             update: {},
+//             create: {
+//               studentId: +studentId,
+//               month,
+//               year,
+//               isPaid: false,
+//             },
+//           });
+
+//           unpaidFees.push(newOrExisting);
+//           existingKeys.add(key);
+//         }
+
+//         lastDate.setMonth(lastDate.getMonth() + 1);
+//       }
+
+//       unpaidFees.sort((a, b) =>
+//         a.year === b.year ? a.month - b.month : a.year - b.year
+//       );
+
+//       const allocationSums = await prisma.paymentAllocation.groupBy({
+//         by: ["studentFeeId"],
+//         where: {
+//           studentFeeId: { in: unpaidFees.map((f) => f.id) },
+//         },
+//         _sum: { amount: true },
+//       });
+
+//       const paidMap = new Map(
+//         allocationSums.map((a) => [a.studentFeeId, Number(a._sum.amount || 0)])
+//       );
+
+//       let availableAmount = Number(amountPaid) + previousCarryForward;
+//       let remainingDiscount = Number(discount);
+
+//       const allocations: {
+//         studentFeeId: number;
+//         amount: number;
+//         studentId: number;
+//       }[] = [];
+
+//       const discountRecords: {
+//         studentFeeId: number;
+//         studentId: number;
+//         amount: number;
+//         reason: string;
+//         month: number;
+//         year: number;
+//         approvedBy: number;
+//       }[] = [];
+
+//       const detailedAllocations: {
+//         studentFeeId: number;
+//         total: number;
+//         paid: number;
+//         discount: number;
+//         month: number;
+//         year: number;
+//       }[] = [];
+
+//       for (const feeRecord of unpaidFees) {
+//         if (availableAmount <= 0 && remainingDiscount <= 0) break;
+
+//         const paidSoFar = paidMap.get(feeRecord.id) || 0;
+//         const due = feeAmount - paidSoFar;
+
+//         const discountToApply = Math.min(remainingDiscount, due);
+//         const paymentToApply = Math.min(due - discountToApply, availableAmount);
+//         const totalPayment = discountToApply + paymentToApply;
+
+//         if (paymentToApply > 0 || discountToApply > 0) {
+//           allocations.push({
+//             studentFeeId: feeRecord.id,
+//             amount: totalPayment,
+//             studentId: +studentId,
+//           });
+
+//           detailedAllocations.push({
+//             studentFeeId: feeRecord.id,
+//             total: totalPayment,
+//             paid: paymentToApply,
+//             discount: discountToApply,
+//             month: feeRecord.month,
+//             year: feeRecord.year,
+//           });
+
+//           if (discountToApply > 0) {
+//             discountRecords.push({
+//               studentFeeId: feeRecord.id,
+//               studentId: +studentId,
+//               amount: discountToApply,
+//               reason: discountReason,
+//               month: feeRecord.month,
+//               year: feeRecord.year,
+//               approvedBy: user.useId,
+//             });
+//             remainingDiscount -= discountToApply;
+//           }
+
+//           availableAmount -= paymentToApply;
+
+//           if (paidSoFar + totalPayment >= feeAmount) {
+//             await prisma.studentFee.update({
+//               where: { id: feeRecord.id },
+//               data: { isPaid: true },
+//             });
+//           }
+//         }
+//       }
+
+//       const newPayment = await prisma.payment.create({
+//         data: {
+//           studentId: +studentId,
+//           userId: user.useId,
+//           amountPaid: Number(amountPaid),
+//           discount: Number(discount),
+//           Description: description,
+//           allocations: { create: allocations },
+//         },
+//       });
+
+//       if (discountRecords.length > 0) {
+//         await prisma.discountLog.createMany({ data: discountRecords });
+//       }
+
+//       await prisma.studentAccount.upsert({
+//         where: { studentId: +studentId },
+//         update: { carryForward: availableAmount },
+//         create: {
+//           studentId: +studentId,
+//           carryForward: availableAmount,
+//         },
+//       });
+
+//       res.status(201).json({
+//         message: "Payment processed successfully",
+//         payment: newPayment,
+//         StudentName: student.fullname,
+//         carryForward: availableAmount,
+//         allocations: detailedAllocations,
+//         appliedDiscounts: discountRecords,
+//       });
+//     });
+//   } catch (error) {
+//     console.error("Error processing payment:", error);
+//     res.status(500).json({
+//       message: "Internal server error while processing payment",
+//       error: error instanceof Error ? error.message : "Unknown error",
+//     });
+//   }
+// };
+
 export const createStudentPayment = async (req: Request, res: Response) => {
   try {
     const {
@@ -271,6 +503,7 @@ export const createStudentPayment = async (req: Request, res: Response) => {
         message: `Access denied, not allowed By: ${user?.role || "UNKNOWN"}`,
       });
     }
+
     await prisma.$transaction(async (prisma) => {
       const student = await prisma.student.findUnique({
         where: { id: +studentId },
@@ -283,16 +516,9 @@ export const createStudentPayment = async (req: Request, res: Response) => {
       const currentMonth = today.getMonth() + 1;
       const currentYear = today.getFullYear();
 
-      const previousAccount = await prisma.studentAccount.findUnique({
-        where: { studentId: +studentId },
-      });
-
-      const previousCarryForward = Number(previousAccount?.carryForward || 0);
-
       let unpaidFees = await prisma.studentFee.findMany({
         where: {
           studentId: +studentId,
-          isPaid: false,
         },
         orderBy: [{ year: "asc" }, { month: "asc" }],
       });
@@ -301,45 +527,54 @@ export const createStudentPayment = async (req: Request, res: Response) => {
         unpaidFees.map((f) => `${f.year}-${f.month}`)
       );
 
-      let totalAvailable = Number(amountPaid) + previousCarryForward;
-      const estimatedMonths =
-        totalAvailable < feeAmount ? 1 : Math.ceil(totalAvailable / feeAmount);
+      const previousAccount = await prisma.studentAccount.findUnique({
+        where: { studentId: +studentId },
+      });
+      let previousCarryForward = Number(previousAccount?.carryForward || 0);
 
+      let availableAmountForGeneration =
+        Number(amountPaid) + Number(discount) + previousCarryForward;
       let lastDate = new Date(currentYear, currentMonth - 1, 1);
 
-      for (let i = 0; i < estimatedMonths; i++) {
+      while (availableAmountForGeneration > 0) {
         const month = lastDate.getMonth() + 1;
         const year = lastDate.getFullYear();
         const key = `${year}-${month}`;
 
-        if (!existingKeys.has(key)) {
-          const newOrExisting = await prisma.studentFee.upsert({
-            where: {
-              studentId_month_year: {
-                studentId: +studentId,
-                month,
-                year,
-              },
+        const alreadyExists = await prisma.studentFee.findUnique({
+          where: {
+            studentId_month_year: {
+              studentId: +studentId,
+              month,
+              year,
             },
-            update: {},
-            create: {
+          },
+        });
+
+        if (!alreadyExists) {
+          const newFee = await prisma.studentFee.create({
+            data: {
               studentId: +studentId,
               month,
               year,
               isPaid: false,
             },
           });
-
-          unpaidFees.push(newOrExisting);
+          unpaidFees.push(newFee);
           existingKeys.add(key);
         }
 
+        availableAmountForGeneration -= feeAmount;
         lastDate.setMonth(lastDate.getMonth() + 1);
       }
 
-      unpaidFees.sort((a, b) =>
-        a.year === b.year ? a.month - b.month : a.year - b.year
-      );
+      unpaidFees = await prisma.studentFee.findMany({
+        where: {
+          studentId: +studentId,
+          isPaid: false,
+        },
+        orderBy: [{ year: "asc" }, { month: "asc" }],
+      });
 
       const allocationSums = await prisma.paymentAllocation.groupBy({
         by: ["studentFeeId"],
@@ -361,25 +596,8 @@ export const createStudentPayment = async (req: Request, res: Response) => {
         amount: number;
         studentId: number;
       }[] = [];
-
-      const discountRecords: {
-        studentFeeId: number;
-        studentId: number;
-        amount: number;
-        reason: string;
-        month: number;
-        year: number;
-        approvedBy: number;
-      }[] = [];
-
-      const detailedAllocations: {
-        studentFeeId: number;
-        total: number;
-        paid: number;
-        discount: number;
-        month: number;
-        year: number;
-      }[] = [];
+      const discountRecords: any[] = [];
+      const detailedAllocations: any[] = [];
 
       for (const feeRecord of unpaidFees) {
         if (availableAmount <= 0 && remainingDiscount <= 0) break;
@@ -2669,40 +2887,6 @@ export const getStudentsWithUnpaidFeeMonthly = async (
   }
 };
 
-//   try {
-//     const discounts = await prisma.discountLog.findMany({
-//       include: {
-//         student: {
-//           select: {
-//             id: true,
-//             fullname: true,
-//           },
-//         },
-//         approvedUser: {
-//           select: {
-//             id: true,
-//             fullName: true,
-//             email: true,
-//           },
-//         },
-//       },
-//       orderBy: {
-//         createdAt: "desc",
-//       },
-//     });
-
-//     res.status(200).json({
-//       message: "All discount logs retrieved successfully",
-//       discounts,
-//     });
-//   } catch (error) {
-//     console.error("Error fetching all discount logs:", error);
-//     res.status(500).json({
-//       message: "Failed to retrieve discount logs",
-//       error: error instanceof Error ? error.message : "Unknown error",
-//     });
-//   }
-// };
 export const getAllDiscountLogs = async (req: Request, res: Response) => {
   try {
     const { month, year } = req.query;
@@ -2755,6 +2939,542 @@ export const getAllDiscountLogs = async (req: Request, res: Response) => {
     console.error("Error fetching filtered discount logs:", error);
     res.status(500).json({
       message: "Failed to retrieve discount logs",
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+};
+
+type SiblingPaymentSummary = {
+  studentId: number;
+  name: string;
+  paid: number;
+  allocations: { studentFeeId: number; amount: number; studentId: number }[];
+  discounts: {
+    studentFeeId: number;
+    studentId: number;
+    amount: number;
+    reason: string;
+    month: number;
+    year: number;
+    approvedBy: number;
+  }[];
+  paymentId: number;
+};
+
+export const payFullForMonthByPhone = async (req: Request, res: Response) => {
+  try {
+    const {
+      parentPhone,
+      month,
+      year,
+      discount = 0,
+      discountReason = "",
+      description = "", // ⬅️ included in destructuring
+    } = req.body;
+
+    if (!parentPhone || !month || !year) {
+      return res
+        .status(400)
+        .json({ message: "parentPhone, month, and year are required" });
+    }
+
+    if (Number(discount) < 0) {
+      return res.status(400).json({ message: "Discount cannot be negative" });
+    }
+
+    // @ts-ignore - from auth middleware
+    const user = req.user as { useId: number; role?: string };
+    if (!["ADMIN", "USER"].includes(user?.role || "")) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    const parent = await prisma.user.findFirst({
+      where: { phoneNumber: parentPhone, role: "PARENT" },
+    });
+
+    if (!parent) {
+      return res.status(404).json({ message: "Parent not found" });
+    }
+
+    const students = await prisma.student.findMany({
+      where: { parentUserId: parent.id, isdeleted: false },
+    });
+
+    let totalDiscount = Number(discount);
+    const summary: SiblingPaymentSummary[] = [];
+
+    await prisma.$transaction(async (prisma) => {
+      for (const student of students) {
+        const feeAmount = Number(student.fee);
+
+        let studentFee = await prisma.studentFee.findUnique({
+          where: {
+            studentId_month_year: {
+              studentId: student.id,
+              month: Number(month),
+              year: Number(year),
+            },
+          },
+        });
+
+        if (!studentFee) {
+          studentFee = await prisma.studentFee.create({
+            data: {
+              studentId: student.id,
+              month: Number(month),
+              year: Number(year),
+              isPaid: false,
+            },
+          });
+        }
+
+        if (studentFee.isPaid) continue;
+
+        const previousAllocations = await prisma.paymentAllocation.aggregate({
+          where: { studentFeeId: studentFee.id },
+          _sum: { amount: true },
+        });
+
+        const alreadyPaid = Number(previousAllocations._sum.amount || 0);
+        const due = feeAmount - alreadyPaid;
+        if (due <= 0) continue;
+
+        const applyDiscount = Math.min(due, totalDiscount);
+        const applyPayment = due - applyDiscount;
+
+        const allocations = [
+          {
+            studentFeeId: studentFee.id,
+            amount: due,
+            studentId: student.id,
+          },
+        ];
+
+        const discounts =
+          applyDiscount > 0
+            ? [
+                {
+                  studentFeeId: studentFee.id,
+                  studentId: student.id,
+                  amount: applyDiscount,
+                  reason: discountReason,
+                  month: Number(month),
+                  year: Number(year),
+                  approvedBy: user.useId,
+                },
+              ]
+            : [];
+
+        await prisma.studentFee.update({
+          where: { id: studentFee.id },
+          data: { isPaid: true },
+        });
+
+        const payment = await prisma.payment.create({
+          data: {
+            studentId: student.id,
+            userId: user.useId,
+            amountPaid: applyPayment,
+            discount: applyDiscount,
+            Description: description, // ⬅️ stored in DB
+            allocations: { create: allocations },
+          },
+        });
+
+        if (discounts.length) {
+          await prisma.discountLog.createMany({ data: discounts });
+          totalDiscount -= applyDiscount;
+        }
+
+        await prisma.studentAccount.upsert({
+          where: { studentId: student.id },
+          update: { carryForward: 0 },
+          create: { studentId: student.id, carryForward: 0 },
+        });
+
+        summary.push({
+          studentId: student.id,
+          name: student.fullname,
+          paid: applyPayment,
+          allocations,
+          discounts,
+          paymentId: payment.id,
+        });
+      }
+    });
+
+    const totalPaid = summary.reduce((sum, s) => sum + s.paid, 0);
+    const totalUsedDiscount = summary.reduce(
+      (sum, s) => sum + s.discounts.reduce((d, i) => d + i.amount, 0),
+      0
+    );
+
+    res.status(200).json({
+      message: "Full monthly payment processed",
+      parentPhone,
+      month: Number(month),
+      year: Number(year),
+      totalPaid,
+      totalDiscountUsed: totalUsedDiscount,
+      paymentDescription: description, // ⬅️ returned in response
+      students: summary,
+    });
+  } catch (error) {
+    console.error("Error:", error);
+    res.status(500).json({
+      message: "Internal server error",
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+};
+
+export const getFamilyBalanceByPhone = async (req: Request, res: Response) => {
+  try {
+    const phone = req.query.phone as string;
+
+    if (!phone) {
+      return res.status(400).json({ message: "Phone number is required" });
+    }
+
+    const parent = await prisma.user.findFirst({
+      where: {
+        phoneNumber: phone,
+        role: "PARENT",
+      },
+    });
+
+    if (!parent) {
+      return res.status(404).json({ message: "Parent not found" });
+    }
+
+    const students = await prisma.student.findMany({
+      where: {
+        parentUserId: parent.id,
+        isdeleted: false,
+      },
+    });
+
+    if (!students.length) {
+      return res
+        .status(404)
+        .json({ message: "No students found for this parent" });
+    }
+
+    let familyBalance = 0;
+    const studentBalances: {
+      studentId: number;
+      fullname: string;
+      balance: number;
+      months: { month: number; year: number; due: number }[];
+    }[] = [];
+
+    for (const student of students) {
+      const unpaidFees = await prisma.studentFee.findMany({
+        where: {
+          studentId: student.id,
+          isPaid: false,
+        },
+        orderBy: [{ year: "asc" }, { month: "asc" }],
+      });
+
+      const allocationSums = await prisma.paymentAllocation.groupBy({
+        by: ["studentFeeId"],
+        where: {
+          studentFeeId: { in: unpaidFees.map((f) => f.id) },
+        },
+        _sum: { amount: true },
+      });
+
+      const paidMap = new Map(
+        allocationSums.map((a) => [a.studentFeeId, Number(a._sum.amount || 0)])
+      );
+
+      const feeAmount = Number(student.fee);
+      let studentTotal = 0;
+      const months: { month: number; year: number; due: number }[] = [];
+
+      for (const fee of unpaidFees) {
+        const paid = paidMap.get(fee.id) || 0;
+        const due = Math.max(feeAmount - paid, 0);
+
+        if (due > 0) {
+          months.push({
+            month: fee.month,
+            year: fee.year,
+            due: due,
+          });
+          studentTotal += due;
+        }
+      }
+
+      familyBalance += studentTotal;
+
+      studentBalances.push({
+        studentId: student.id,
+        fullname: student.fullname,
+        balance: studentTotal,
+        months,
+      });
+    }
+
+    return res.status(200).json({
+      parentName: parent.fullName,
+      phone: parent.phoneNumber,
+      totalFamilyBalance: familyBalance,
+      students: studentBalances,
+    });
+  } catch (error) {
+    console.error("Error getting family balance:", error);
+    return res.status(500).json({
+      message: "Server error",
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+};
+
+export const payStudentMonth = async (req: Request, res: Response) => {
+  try {
+    const {
+      studentId,
+      month,
+      year,
+      amountPaid,
+      discount = 0,
+      discountReason = "",
+      description = "",
+    } = req.body;
+
+    if (!studentId || !month || !year || amountPaid == null) {
+      return res.status(400).json({ message: "Missing required fields" });
+    }
+
+    // @ts-ignore
+    const user = req.user as { useId: number; role?: string };
+
+    if (!user || (user.role !== "ADMIN" && user.role !== "USER")) {
+      return res.status(403).json({ message: "Unauthorized user role" });
+    }
+
+    const student = await prisma.student.findUnique({
+      where: { id: +studentId },
+    });
+    if (!student) return res.status(404).json({ message: "Student not found" });
+
+    const feeAmount = Number(student.fee);
+
+    // Find or create the specific fee record
+    let studentFee = await prisma.studentFee.findUnique({
+      where: {
+        studentId_month_year: {
+          studentId: +studentId,
+          month,
+          year,
+        },
+      },
+    });
+
+    if (!studentFee) {
+      studentFee = await prisma.studentFee.create({
+        data: {
+          studentId: +studentId,
+          month,
+          year,
+          isPaid: false,
+        },
+      });
+    }
+
+    // Get amount already paid toward this fee
+    const existingAllocations = await prisma.paymentAllocation.findMany({
+      where: { studentFeeId: studentFee.id },
+    });
+
+    const totalPaid = existingAllocations.reduce(
+      (sum, a) => sum + Number(a.amount),
+      0
+    );
+    const due = feeAmount - totalPaid;
+
+    const appliedDiscount = Math.min(discount, due);
+    const appliedPayment = Math.min(amountPaid, due - appliedDiscount);
+
+    if (appliedDiscount + appliedPayment <= 0) {
+      return res.status(400).json({ message: "Nothing to pay or discount" });
+    }
+
+    // Save payment
+    const payment = await prisma.payment.create({
+      data: {
+        studentId: +studentId,
+        userId: user.useId,
+        amountPaid: appliedPayment,
+        discount: appliedDiscount,
+        Description: description,
+        allocations: {
+          create: [
+            {
+              studentFeeId: studentFee.id,
+              amount: appliedDiscount + appliedPayment,
+              studentId: +studentId,
+            },
+          ],
+        },
+      },
+    });
+
+    // Save discount
+    if (appliedDiscount > 0) {
+      await prisma.discountLog.create({
+        data: {
+          studentFeeId: studentFee.id,
+          studentId: +studentId,
+          amount: appliedDiscount,
+          reason: discountReason,
+          month,
+          year,
+          approvedBy: user.useId,
+        },
+      });
+    }
+
+    // Update fee as paid if fully covered
+    if (totalPaid + appliedPayment + appliedDiscount >= feeAmount) {
+      await prisma.studentFee.update({
+        where: { id: studentFee.id },
+        data: { isPaid: true },
+      });
+    }
+
+    res.status(201).json({
+      message: "Payment successful",
+      paymentId: payment.id,
+      student: student.fullname,
+      paid: appliedPayment,
+      discount: appliedDiscount,
+      month,
+      year,
+    });
+  } catch (error) {
+    console.error("Error in payStudentMonth:", error);
+    res.status(500).json({ message: "Internal server error", error });
+  }
+};
+
+export const checkIfPaymentNumberAlreadyUsed = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const { number, method } = req.body;
+
+    if (!number || !method) {
+      return res.status(400).json({
+        message: "number and method are required",
+      });
+    }
+
+    const formattedDescription = `${method} - ${number.trim()}`;
+
+    // ✅ Fetch all payments with same description
+    const payments = await prisma.payment.findMany({
+      where: {
+        Description: formattedDescription,
+      },
+      include: {
+        allocations: {
+          include: {
+            studentFee: true,
+            Student: true,
+          },
+        },
+      },
+    });
+
+    if (payments.length > 0) {
+      const allAllocations = payments.flatMap((p) => p.allocations);
+
+      return res.status(200).json({
+        alreadyUsed: true,
+        message: `${method} number ${number} was already used.`,
+        paymentIds: payments.map((p) => p.id),
+        description: formattedDescription,
+        createdAt: payments[0].date, // or most recent
+        paidFor: allAllocations.map((a) => ({
+          student: a.Student?.fullname || "Unknown student",
+          month: a.studentFee?.month,
+          year: a.studentFee?.year,
+          amount: a.amount,
+        })),
+      });
+    }
+
+    return res.status(200).json({
+      alreadyUsed: false,
+      message: `${method} number ${number} has not been used.`,
+    });
+  } catch (error) {
+    console.error("Error checking payment:", error);
+    return res.status(500).json({
+      message: "Internal server error",
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+};
+
+export const checkLastPaymentByNumber = async (req: Request, res: Response) => {
+  try {
+    const { number, method } = req.body;
+
+    if (!number || !method) {
+      return res.status(400).json({
+        message: "number and method are required",
+      });
+    }
+
+    const formattedDescription = `${method} - ${number.trim()}`;
+
+    // ✅ Get the latest payment (by createdAt descending)
+    const payment = await prisma.payment.findFirst({
+      where: {
+        Description: formattedDescription,
+      },
+      orderBy: {
+        date: "desc", // or "createdAt" depending on your schema
+      },
+      include: {
+        allocations: {
+          include: {
+            studentFee: true,
+            Student: true,
+          },
+        },
+      },
+    });
+
+    if (!payment) {
+      return res.status(200).json({
+        alreadyUsed: false,
+        message: `${method} number ${number} has not been used yet.`,
+      });
+    }
+
+    return res.status(200).json({
+      alreadyUsed: true,
+      message: `${method} number ${number} was already used.`,
+      paymentId: payment.id,
+      description: payment.Description,
+      createdAt: payment.date, // or payment.createdAt
+      paidFor: payment.allocations.map((a) => ({
+        student: a.Student?.fullname || "Unknown",
+        month: a.studentFee?.month,
+        year: a.studentFee?.year,
+        amount: a.amount.toString(),
+      })),
+    });
+  } catch (error) {
+    console.error("Error checking last payment by number:", error);
+    return res.status(500).json({
+      message: "Internal server error",
       error: error instanceof Error ? error.message : "Unknown error",
     });
   }

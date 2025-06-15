@@ -32,7 +32,7 @@ enum StudentStatus {
 
 enum SchoolType {
   PRIVATE
-  PUBLIC
+  PUBLICs
   NOT_SPECIFIC
 }
 
@@ -130,6 +130,43 @@ model classes {
   TeacherClass      TeacherClass[]
 }
 
+// model Student {
+//   id                 Int                 @id @default(autoincrement())
+//   firstname          String
+//   middlename         String
+//   lastname           String
+//   fourtname          String?             @default("Fourt name")
+//   fullname           String
+//   classId            Int
+//   phone              String
+//   phone2             String?
+//   bus                String?
+//   address            String?
+//   previousSchool     String?
+//   previousSchoolType SchoolType          @default(NOT_SPECIFIC) // ✅ Here
+//   motherName         String?
+//   gender             String?
+//   Age                Int
+//   fee                Decimal
+//   familyName         String?
+//   status             StudentStatus?      @default(ACTIVE)
+//   absentCount        Int?                @default(0)
+//   lastWarningDate    DateTime?
+//   isdeleted          Boolean             @default(false)
+//   userid             Int
+//   user               User                @relation(fields: [userid], references: [id])
+//   parentUserId       Int?
+//   parentUser         User?               @relation("ParentRelation", fields: [parentUserId], references: [id])
+//   classes            classes             @relation(fields: [classId], references: [id])
+//   Discipline         Discipline[]
+//   PaymentAllocation  PaymentAllocation[]
+//   Payment            Payment[]
+//   Attendance         Attendance[]
+//   Score              Score[]
+//   StudentFee         StudentFee[]
+//   StudentAccount     StudentAccount?
+//   DiscountLog        DiscountLog[]
+// }
 model Student {
   id                 Int                 @id @default(autoincrement())
   firstname          String
@@ -143,7 +180,7 @@ model Student {
   bus                String?
   address            String?
   previousSchool     String?
-  previousSchoolType SchoolType          @default(NOT_SPECIFIC) // ✅ Here
+  previousSchoolType SchoolType          @default(NOT_SPECIFIC)
   motherName         String?
   gender             String?
   Age                Int
@@ -153,6 +190,7 @@ model Student {
   absentCount        Int?                @default(0)
   lastWarningDate    DateTime?
   isdeleted          Boolean             @default(false)
+  createdAt          DateTime            @default(now()) // ✅ Add this line
   userid             Int
   user               User                @relation(fields: [userid], references: [id])
   parentUserId       Int?

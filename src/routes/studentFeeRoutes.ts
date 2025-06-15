@@ -22,6 +22,11 @@ import {
   getAllDiscountLogs,
   getAllPayments,
   updatePayment,
+  getFamilyBalanceByPhone,
+  payStudentMonth,
+  payFullForMonthByPhone,
+  checkIfPaymentNumberAlreadyUsed,
+  checkLastPaymentByNumber,
 } from "../controller/PaymentContorller";
 import { authenticate } from "../middlewares/authaniticator";
 
@@ -57,5 +62,10 @@ router.get("/students/:id/deposit-status", getStudentDepositStatus);
 router.get("/payments/combined", getCombinedPayments);
 router.get("/income/today", getTodayIncome);
 router.get("/Classfee/status", getStudentsWithUnpaidFeeMonthly);
+router.get("/family/balance", getFamilyBalanceByPhone);
+router.post("/pay/month", authenticate, payStudentMonth);
+router.post("/pay-full-month", authenticate, payFullForMonthByPhone);
+router.post("/check-payment-number", checkIfPaymentNumberAlreadyUsed);
+router.post("/payment/check-last-used-number", checkLastPaymentByNumber);
 
 export default router;
