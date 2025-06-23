@@ -3,7 +3,7 @@ import express from "express";
 import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 import userRouter from "./routes/usrroures";
-import noteRouter from "./routes/note";
+// import noteRouter from "./routes/note";
 import studentRouter from "./routes/StudentReg";
 import examtypeRouter from "./routes/Exam";
 import Dicipline from "./routes/disciplineroutes";
@@ -13,6 +13,7 @@ import expenseRoutes from "./routes/expenseRoutes";
 import FinanacialRoutes from "./routes/financialReports";
 import cors from "cors";
 import path from "path";
+import workPlanRoutes from "./routes/workPlanRoutes";
 
 // import morgan from "morgan";
 const app = express();
@@ -41,7 +42,7 @@ app.get("/health", (req, res) => {
 
 // Routes
 app.use("/user", userRouter);
-app.use("/Note", noteRouter);
+// app.use("/Note", noteRouter);
 app.use("/student", studentRouter);
 app.use("/exam", examtypeRouter);
 app.use("/Dicipline", Dicipline);
@@ -49,6 +50,7 @@ app.use("/fee", FeeRouter);
 app.use("/EmployeeAdvance", AdvanceRouter);
 app.use("/expenses", expenseRoutes);
 app.use("/financial/Reports", FinanacialRoutes);
+app.use("/api/workplans", workPlanRoutes);
 app.use(
   "/uploads",
   express.static(path.join(__dirname, "../uploads"), {

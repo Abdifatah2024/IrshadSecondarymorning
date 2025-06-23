@@ -28,11 +28,15 @@ export const createStudent = async (req: Request, res: Response) => {
       bus,
       address,
       previousSchool,
-      previousSchoolType, // NEW FIELD
+      previousSchoolType,
       motherName,
       gender,
       age,
       fee,
+      district,
+      transfer,
+      parentEmail,
+      academicYearId, // optional
     } = req.body;
 
     // @ts-ignore
@@ -41,10 +45,13 @@ export const createStudent = async (req: Request, res: Response) => {
     const fullname = `${firstname} ${middlename} ${lastname} ${
       fourtname || ""
     }`.trim();
+    const familyName = ["Reer", middlename, lastname, fourtname]
+      .filter(Boolean)
+      .join(" ");
     const username = `${lastname.toLowerCase()}_${phone.slice(-4)}`;
     const email = `${username}@parent.school.com`;
 
-    // Find or create parent
+    // Check if parent exists or create one
     let parentUser = await prisma.user.findFirst({
       where: {
         phoneNumber: phone,
@@ -67,32 +74,48 @@ export const createStudent = async (req: Request, res: Response) => {
       });
     }
 
-    const result = await prisma.$transaction(async (prisma) => {
-      const newStudent = await prisma.student.create({
+    // Generate roll number like STU-2025-0001
+    const studentCount = await prisma.student.count();
+    const year = new Date().getFullYear();
+    const rollNumber = `STU-${year}-${String(studentCount + 1).padStart(
+      4,
+      "0"
+    )}`;
+
+    const result = await prisma.$transaction(async (tx) => {
+      const newStudent = await tx.student.create({
         data: {
           firstname,
           middlename,
           lastname,
           fourtname,
           fullname,
-          classId: Number(classId),
+          familyName,
           phone,
           phone2,
           bus,
           address,
           previousSchool,
-          previousSchoolType: previousSchoolType || "NOT_SPECIFIC", // handle default
+          previousSchoolType: previousSchoolType || "NOT_SPECIFIC",
           motherName,
           gender,
           Age: Number(age),
           fee: Number(fee),
+          district,
+          transfer: Boolean(transfer),
+          parentEmail,
+          rollNumber,
+          academicYearId: academicYearId || 1,
+          registeredById: user.useId,
           userid: user.useId,
           parentUserId: parentUser.id,
+          classId: Number(classId), // ✅ correct usage of relation
         },
       });
 
       const today = new Date();
-      await prisma.studentFee.create({
+
+      await tx.studentFee.create({
         data: {
           studentId: newStudent.id,
           month: today.getMonth() + 1,
@@ -101,7 +124,7 @@ export const createStudent = async (req: Request, res: Response) => {
         },
       });
 
-      await prisma.studentAccount.create({
+      await tx.studentAccount.create({
         data: {
           studentId: newStudent.id,
           carryForward: 0,
@@ -125,136 +148,6 @@ export const createStudent = async (req: Request, res: Response) => {
     console.error("Error creating student:", error);
     res.status(500).json({
       message: "Server error while creating student",
-      error: error instanceof Error ? error.message : "Unknown error",
-    });
-  }
-};
-
-export const createMultipleStudents = async (req: Request, res: Response) => {
-  try {
-    const studentsData = req.body;
-
-    if (!Array.isArray(studentsData) || studentsData.length === 0) {
-      return res.status(400).json({
-        message: "Invalid input, expected an array of students",
-      });
-    }
-
-    // @ts-ignore
-    const user = req.user;
-    const createdStudents = [];
-
-    for (const studentData of studentsData) {
-      const {
-        firstname,
-        middlename,
-        lastname,
-        fourtname,
-        classId,
-        phone,
-        phone2,
-        bus,
-        address,
-        previousSchool,
-        previousSchoolType,
-        motherName,
-        gender,
-        Age,
-        fee,
-      } = studentData;
-
-      // Check if the student already exists
-      const existing = await prisma.student.findFirst({ where: { phone } });
-      if (existing) {
-        return res.status(400).json({
-          message: `Phone number ${phone} already exists.`,
-        });
-      }
-
-      const fullname = `${firstname} ${middlename} ${lastname} ${
-        fourtname || ""
-      }`.trim();
-      const username = `${lastname.toLowerCase()}_${phone.slice(-4)}`;
-      const email = `${username}@parent.school.com`;
-
-      // Reuse or create parent user
-      let parentUser = await prisma.user.findFirst({
-        where: {
-          phoneNumber: phone,
-          role: "PARENT",
-        },
-      });
-
-      if (!parentUser) {
-        const hashedPassword = await bcryptjs.hash(phone, 10);
-        parentUser = await prisma.user.create({
-          data: {
-            fullName: motherName || `${firstname} ${lastname} Parent`,
-            username,
-            email,
-            phoneNumber: phone,
-            password: hashedPassword,
-            confirmpassword: hashedPassword,
-            role: "PARENT",
-          },
-        });
-      }
-
-      const today = new Date();
-      const currentMonth = today.getMonth() + 1;
-      const currentYear = today.getFullYear();
-
-      // Create student and related data in transaction
-      const newStudent = await prisma.student.create({
-        data: {
-          firstname,
-          middlename,
-          lastname,
-          fourtname,
-          fullname,
-          classId: Number(classId),
-          phone,
-          phone2,
-          bus,
-          address,
-          previousSchool,
-          previousSchoolType: previousSchoolType || "NOT_SPECIFIC",
-          motherName,
-          gender,
-          Age: Number(Age),
-          fee: Number(fee),
-          userid: user.useId,
-          parentUserId: parentUser.id,
-        },
-      });
-
-      await prisma.studentFee.create({
-        data: {
-          studentId: newStudent.id,
-          month: currentMonth,
-          year: currentYear,
-          isPaid: false,
-        },
-      });
-
-      await prisma.studentAccount.create({
-        data: {
-          studentId: newStudent.id,
-          carryForward: 0,
-        },
-      });
-
-      createdStudents.push(newStudent);
-    }
-
-    res.status(201).json({
-      message: "Students created successfully with parent and fee records",
-      students: createdStudents,
-    });
-  } catch (error) {
-    console.error("Error creating multiple students:", error);
-    res.status(500).json({
-      message: "Server error while creating students",
       error: error instanceof Error ? error.message : "Unknown error",
     });
   }
@@ -378,6 +271,154 @@ export const createMultipleStudents = async (req: Request, res: Response) => {
 
 // Get Single Student by ID
 
+export const createMultipleStudents = async (req: Request, res: Response) => {
+  try {
+    const studentsData = req.body;
+
+    if (!Array.isArray(studentsData) || studentsData.length === 0) {
+      return res.status(400).json({
+        message: "Invalid input, expected an array of students",
+      });
+    }
+
+    // @ts-ignore
+    const user = req.user;
+    const createdStudents = [];
+
+    for (const studentData of studentsData) {
+      const {
+        firstname,
+        middlename,
+        lastname,
+        fourtname,
+        classId,
+        phone,
+        phone2,
+        bus,
+        address,
+        previousSchool,
+        previousSchoolType,
+        motherName,
+        gender,
+        Age,
+        fee,
+        district,
+        transfer,
+        parentEmail,
+        academicYearId,
+      } = studentData;
+
+      // Check for duplicates by phone
+      const existing = await prisma.student.findFirst({ where: { phone } });
+      if (existing) {
+        return res.status(400).json({
+          message: `Phone number ${phone} already exists.`,
+        });
+      }
+
+      const fullname = `${firstname} ${middlename} ${lastname} ${
+        fourtname || ""
+      }`.trim();
+      const familyName = ["Reer", middlename, lastname, fourtname]
+        .filter(Boolean)
+        .join(" ");
+      const username = `${lastname.toLowerCase()}_${phone.slice(-4)}`;
+      const email = `${username}@parent.school.com`;
+
+      // Create or reuse parent
+      let parentUser = await prisma.user.findFirst({
+        where: {
+          phoneNumber: phone,
+          role: "PARENT",
+        },
+      });
+
+      if (!parentUser) {
+        const hashedPassword = await bcryptjs.hash(phone, 10);
+        parentUser = await prisma.user.create({
+          data: {
+            fullName: motherName || `${firstname} ${lastname} Parent`,
+            username,
+            email,
+            phoneNumber: phone,
+            password: hashedPassword,
+            confirmpassword: hashedPassword,
+            role: "PARENT",
+          },
+        });
+      }
+
+      // Generate roll number like STU-2025-0005
+      const studentCount = await prisma.student.count();
+      const year = new Date().getFullYear();
+      const rollNumber = `STU-${year}-${String(studentCount + 1).padStart(
+        4,
+        "0"
+      )}`;
+
+      // Create student + related data
+      const newStudent = await prisma.student.create({
+        data: {
+          firstname,
+          middlename,
+          lastname,
+          fourtname,
+          fullname,
+          familyName,
+          classId: Number(classId),
+          phone,
+          phone2,
+          bus,
+          address,
+          previousSchool,
+          previousSchoolType: previousSchoolType || "NOT_SPECIFIC",
+          motherName,
+          gender,
+          Age: Number(Age),
+          fee: Number(fee),
+          district,
+          transfer: Boolean(transfer),
+          parentEmail,
+          rollNumber,
+          academicYearId: academicYearId || 1,
+          registeredById: user.useId,
+          userid: user.useId,
+          parentUserId: parentUser.id,
+        },
+      });
+
+      const today = new Date();
+      await prisma.studentFee.create({
+        data: {
+          studentId: newStudent.id,
+          month: today.getMonth() + 1,
+          year: today.getFullYear(),
+          isPaid: false,
+        },
+      });
+
+      await prisma.studentAccount.create({
+        data: {
+          studentId: newStudent.id,
+          carryForward: 0,
+        },
+      });
+
+      createdStudents.push(newStudent);
+    }
+
+    res.status(201).json({
+      message: "Students created successfully with parent and fee records",
+      students: createdStudents,
+    });
+  } catch (error) {
+    console.error("Error creating multiple students:", error);
+    res.status(500).json({
+      message: "Server error while creating students",
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+};
 export const createMultipleStudentsByExcel = async (
   req: Request,
   res: Response
@@ -422,11 +463,14 @@ export const createMultipleStudentsByExcel = async (
         gender,
         Age,
         fee,
+        district,
+        transfer,
+        parentEmail,
+        academicYearId,
       } = row as any;
 
       const rowIndex = i + 2;
 
-      // Skip if essential fields are missing
       if (
         !firstname ||
         !lastname ||
@@ -450,6 +494,9 @@ export const createMultipleStudentsByExcel = async (
       const fullName = `${firstname} ${middlename || ""} ${lastname} ${
         fourtname || ""
       }`.trim();
+      const familyName = ["Reer", middlename, lastname, fourtname]
+        .filter(Boolean)
+        .join(" ");
       const username = `${lastname.toLowerCase()}_${phoneStr.slice(-4)}`;
       const email = `${username}@parent.school.com`;
 
@@ -484,7 +531,15 @@ export const createMultipleStudentsByExcel = async (
           });
         }
 
-        // Use Prisma transaction for consistency
+        // Generate roll number
+        const count = await prisma.student.count();
+        const currentYear = new Date().getFullYear();
+        const rollNumber = `STU-${currentYear}-${String(count + 1).padStart(
+          4,
+          "0"
+        )}`;
+
+        // Create in transaction
         const student = await prisma.$transaction(async (tx) => {
           const newStudent = await tx.student.create({
             data: {
@@ -493,6 +548,7 @@ export const createMultipleStudentsByExcel = async (
               lastname,
               fourtname,
               fullname: fullName,
+              familyName,
               classId: Number(classId),
               phone: phoneStr,
               phone2: phone2Str,
@@ -504,6 +560,12 @@ export const createMultipleStudentsByExcel = async (
               gender,
               Age: Number(Age),
               fee: Number(fee),
+              district: district || "Unknown",
+              transfer: Boolean(transfer),
+              parentEmail: parentEmail || "",
+              rollNumber,
+              academicYearId: academicYearId || 1,
+              registeredById: user.useId,
               userid: user.useId,
               parentUserId: parentUser.id,
             },
@@ -2337,6 +2399,93 @@ export const getStudentsWithoutBus = async (req: Request, res: Response) => {
     console.error("Error fetching students without bus:", error);
     res.status(500).json({
       message: "Server error while fetching students without bus",
+    });
+  }
+};
+
+export const updateStudentTransferAndRollNumber = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const { id, transfer, rollNumber } = req.body;
+
+    if (!id) {
+      return res.status(400).json({ message: "Student ID is required." });
+    }
+
+    // Optional: Validate if rollNumber is already taken
+    if (rollNumber) {
+      const existingRoll = await prisma.student.findUnique({
+        where: { rollNumber },
+      });
+
+      if (existingRoll && existingRoll.id !== id) {
+        return res.status(409).json({ message: "Roll number already in use." });
+      }
+    }
+
+    const updatedStudent = await prisma.student.update({
+      where: { id: Number(id) },
+      data: {
+        transfer: Boolean(transfer),
+        rollNumber,
+      },
+    });
+
+    res.status(200).json({
+      message: "Student transfer status and roll number updated successfully.",
+      student: updatedStudent,
+    });
+  } catch (error) {
+    console.error("Error updating student:", error);
+    res.status(500).json({
+      message: "Server error while updating student",
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+};
+
+export const listUntransferredStudents = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const students = await prisma.student.findMany({
+      where: {
+        transfer: false,
+      },
+      include: {
+        classes: {
+          select: {
+            name: true, // ✅ Correct field
+          },
+        },
+      },
+      orderBy: {
+        id: "asc",
+      },
+    });
+
+    const result = students.map((student) => ({
+      fullname: student.fullname,
+      classname: student.classes.name, // ✅ Corrected field
+      phone: student.phone,
+      phone2: student.phone2,
+      previousSchool: student.previousSchool,
+      rollNumber: student.rollNumber,
+      transfer: student.transfer,
+    }));
+
+    res.status(200).json({
+      message: "Untransferred students fetched successfully.",
+      students: result,
+    });
+  } catch (error) {
+    console.error("Error fetching students:", error);
+    res.status(500).json({
+      message: "Server error while fetching students.",
+      error: error instanceof Error ? error.message : "Unknown error",
     });
   }
 };

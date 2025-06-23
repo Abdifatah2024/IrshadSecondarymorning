@@ -321,6 +321,20 @@ export const users = async (_req: Request, res: Response) => {
   }
 };
 
+export const GetTeachers = async (_req: Request, res: Response) => {
+  try {
+    const list = await prisma.user.findMany({
+      where: {
+        role: "Teacher",
+      },
+    });
+    res.json(list);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Error fetching users" });
+  }
+};
+
 // ─────────────────────────────────────────────────────
 // Update User
 // ─────────────────────────────────────────────────────
@@ -1156,13 +1170,6 @@ export const updateUserRole = async (req: Request, res: Response) => {
       return res.status(404).json({ message: "Target user not found." });
     }
 
-    // ✅ Only allow updating users whose current role is exactly "USER"
-    // if (targetUser.role !== "USER") {
-    //   return res.status(403).json({
-    //     message: `Cannot change role of a ${targetUser.role} user.`,
-    //   });
-    // }
-
     const updatedUser = await prisma.user.update({
       where: { id: userId },
       data: { role: newRole },
@@ -1179,5 +1186,162 @@ export const updateUserRole = async (req: Request, res: Response) => {
   } catch (error) {
     console.error("Error updating role:", error);
     return res.status(500).json({ message: "Server error." });
+  }
+};
+
+// controllers/announcementController.ts
+export const createAnnouncement = async (req: Request, res: Response) => {
+  const { title, message, targetRole, startDate, endDate } = req.body;
+  //@ts-ignore
+  const userId = req.user.useId;
+
+  try {
+    const announcement = await prisma.announcement.create({
+      data: {
+        title,
+        message,
+        targetRole,
+        startDate: new Date(startDate),
+        endDate: new Date(endDate),
+        createdById: userId,
+      },
+    });
+
+    res.status(201).json(announcement);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to create announcement." });
+  }
+};
+
+export const getAnnouncements = async (req: Request, res: Response) => {
+  //@ts-ignore
+  const userRole = req.user.role;
+  const now = new Date();
+
+  try {
+    const announcements = await prisma.announcement.findMany({
+      where: {
+        targetRole: userRole,
+        startDate: { lte: now },
+        endDate: { gte: now },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    // Calculate time left for each announcement
+    const enhancedAnnouncements = announcements.map((a) => {
+      const timeDiff = new Date(a.endDate).getTime() - now.getTime();
+
+      const daysLeft = Math.floor(timeDiff / (1000 * 60 * 60 * 24));
+      const hoursLeft = Math.floor((timeDiff / (1000 * 60 * 60)) % 24);
+      const minutesLeft = Math.floor((timeDiff / (1000 * 60)) % 60);
+
+      return {
+        ...a,
+        timeRemaining: `${daysLeft}d ${hoursLeft}h ${minutesLeft}m`,
+        daysLeft,
+        hoursLeft,
+        minutesLeft,
+      };
+    });
+
+    res.status(200).json(enhancedAnnouncements);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to fetch announcements." });
+  }
+};
+
+export const getAllAnnouncementsForAdmin = async (
+  req: Request,
+  res: Response
+) => {
+  //@ts-ignore
+  const userRole = req.user.role;
+
+  if (userRole !== "ADMIN") {
+    return res.status(403).json({ message: "Access denied: Admins only." });
+  }
+
+  const now = new Date();
+
+  try {
+    const announcements = await prisma.announcement.findMany({
+      orderBy: { createdAt: "desc" },
+      include: {
+        createdBy: {
+          select: {
+            id: true,
+            fullName: true,
+            email: true,
+            role: true,
+          },
+        },
+      },
+    });
+
+    // Enhance with time remaining info
+    const enhancedAnnouncements = announcements.map((a) => {
+      const timeDiff = new Date(a.endDate).getTime() - now.getTime();
+
+      const daysLeft = Math.floor(timeDiff / (1000 * 60 * 60 * 24));
+      const hoursLeft = Math.floor((timeDiff / (1000 * 60 * 60)) % 24);
+      const minutesLeft = Math.floor((timeDiff / (1000 * 60)) % 60);
+
+      return {
+        ...a,
+        timeRemaining:
+          timeDiff > 0
+            ? `${daysLeft}d ${hoursLeft}h ${minutesLeft}m`
+            : "Expired",
+        daysLeft: timeDiff > 0 ? daysLeft : 0,
+        hoursLeft: timeDiff > 0 ? hoursLeft : 0,
+        minutesLeft: timeDiff > 0 ? minutesLeft : 0,
+        isExpired: timeDiff <= 0,
+      };
+    });
+
+    res.status(200).json(enhancedAnnouncements);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to fetch all announcements." });
+  }
+};
+
+// Update (edit) announcement
+export const updateAnnouncement = async (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  const { title, message, targetRole, startDate, endDate } = req.body;
+
+  try {
+    const updated = await prisma.announcement.update({
+      where: { id },
+      data: {
+        title,
+        message,
+        targetRole,
+        startDate: new Date(startDate),
+        endDate: new Date(endDate),
+      },
+    });
+
+    res.json(updated);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to update announcement." });
+  }
+};
+
+// Delete announcement
+export const deleteAnnouncement = async (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+
+  try {
+    await prisma.announcement.delete({ where: { id } });
+    res.status(204).end();
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to delete announcement." });
   }
 };

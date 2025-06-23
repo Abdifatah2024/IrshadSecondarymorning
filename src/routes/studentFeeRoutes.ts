@@ -27,6 +27,7 @@ import {
   payFullForMonthByPhone,
   checkIfPaymentNumberAlreadyUsed,
   checkLastPaymentByNumber,
+  payFullForMonthByStudent,
 } from "../controller/PaymentContorller";
 import { authenticate } from "../middlewares/authaniticator";
 
@@ -67,5 +68,5 @@ router.post("/pay/month", authenticate, payStudentMonth);
 router.post("/pay-full-month", authenticate, payFullForMonthByPhone);
 router.post("/check-payment-number", checkIfPaymentNumberAlreadyUsed);
 router.post("/payment/check-last-used-number", checkLastPaymentByNumber);
-
+router.post("/payment/student", authenticate, payFullForMonthByStudent);
 export default router;

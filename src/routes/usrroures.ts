@@ -31,6 +31,12 @@ import {
   uploadPdfFile,
   getAllDocuments,
   deleteUserDocument,
+  GetTeachers,
+  createAnnouncement,
+  getAnnouncements,
+  getAllAnnouncementsForAdmin,
+  updateAnnouncement,
+  deleteAnnouncement,
 } from "../controller/user.controller";
 
 import {
@@ -49,6 +55,8 @@ router.get("/whoami", authenticate, whoami);
 router.get("/userinfo/:id", userinfo);
 router.get("/userinfo/:id", getUser);
 router.get("/list", users);
+router.get("/listTeachers", GetTeachers);
+
 router.put("/:id", updateUser);
 router.delete("/:id", deleteUser);
 
@@ -82,5 +90,12 @@ router.put("/users/:id/role", authenticate, updateUserRole);
 router.post("/upload-pdf", uploadPdf.single("pdf"), uploadPdfFile);
 router.get("/documents", getAllDocuments);
 router.delete("/documents/:id", authenticate, deleteUserDocument);
+
+/* ---------------------------- announcement ---------------------------- */
+router.post("/announcements", authenticate, createAnnouncement);
+router.get("/announcements", authenticate, getAnnouncements);
+router.get("/announcements/all", authenticate, getAllAnnouncementsForAdmin);
+router.put("/announcements/:id", updateAnnouncement);
+router.delete("/announcements/:id", deleteAnnouncement);
 
 export default router;
