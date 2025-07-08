@@ -248,6 +248,58 @@ export const login = async (req: Request, res: Response) => {
   }
 };
 
+// export const login = async (req: Request, res: Response) => {
+//   try {
+//     const { password, email } = req.body;
+
+//     if (!password || !email) {
+//       return res
+//         .status(400)
+//         .json({ message: "Email and password are required." });
+//     }
+
+//     const user = await prisma.user.findFirst({
+//       where: { email: email.toLowerCase() },
+//     });
+
+//     if (!user) {
+//       return res.status(401).json({ message: "Incorrect email or password." });
+//     }
+
+//     const isPasswordValid = bcryptjs.compareSync(password, user.password);
+//     if (!isPasswordValid) {
+//       return res.status(401).json({ message: "Incorrect password." });
+//     }
+
+//     // ✅ Generate tokens
+//     const accessToken = genarateToken(user);
+//     const refreshToken = generateRefreshToken(user);
+
+//     // ✅ Set refresh token in cookie
+//     res.cookie("refreshToken", refreshToken, {
+//       httpOnly: true,
+//       secure: process.env.NODE_ENV === "production",
+//       sameSite: "strict",
+//       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+//     });
+
+//     return res.status(200).json({
+//       message: "Successfully logged in!",
+//       user: {
+//         id: user.id,
+//         email: user.email,
+//         username: user.username,
+//         fullname: user.fullName,
+//         Role: user.role,
+//       },
+//       Access_Token: accessToken,
+//     });
+//   } catch (error) {
+//     console.error("Login error:", error);
+//     return res.status(500).json({ message: "Login failed. Please try again." });
+//   }
+// };
+
 // ─────────────────────────────────────────────────────
 // Change Password
 // ─────────────────────────────────────────────────────
@@ -396,6 +448,17 @@ const genarateToken = (user: User): string => {
   return jwt.sign(payload, process.env.JWT_SECRET_KEY as string, {
     issuer: "Api.Irshaad.com",
     expiresIn: "1d",
+  });
+};
+
+export const generateRefreshToken = (user: User): string => {
+  const payload = {
+    userId: user.id,
+  };
+
+  return jwt.sign(payload, process.env.JWT_REFRESH_SECRET_KEY as string, {
+    issuer: "Api.Irshaad.com",
+    expiresIn: "7d", // 7 days
   });
 };
 
@@ -996,61 +1059,6 @@ export const getMyStudents = async (req: Request, res: Response) => {
 // controllers/authController.ts
 import crypto from "crypto";
 
-// export const requestPasswordReset = async (req: Request, res: Response) => {
-//   try {
-//     const { email } = req.body;
-//     const user = await prisma.user.findUnique({
-//       where: { email: email.toLowerCase() },
-//     });
-
-//     if (!user)
-//       return res
-//         .status(404)
-//         .json({ message: "No user found with that email." });
-
-//     // Limit: 3 times per hour
-//     const now = new Date();
-//     const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
-
-//     if (user.lastResetRequestAt && user.lastResetRequestAt > oneHourAgo) {
-//       if (user.resetRequestCount >= 3) {
-//         return res.status(429).json({
-//           message: "Too many reset requests. Try again in 1 hour.",
-//         });
-//       }
-//     } else {
-//       // Reset count if it's been more than an hour
-//       await prisma.user.update({
-//         where: { id: user.id },
-//         data: {
-//           resetRequestCount: 0,
-//         },
-//       });
-//     }
-
-//     const token = crypto.randomBytes(32).toString("hex");
-//     const tokenExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 min
-
-//     await prisma.user.update({
-//       where: { id: user.id },
-//       data: {
-//         resetToken: token,
-//         resetTokenExpires: tokenExpires,
-//         resetRequestCount: { increment: 1 },
-//         lastResetRequestAt: now,
-//       },
-//     });
-
-//     return res.status(200).json({
-//       message: "Reset token sent.",
-//       resetToken: token, // for testing only
-//     });
-//   } catch (error) {
-//     console.error("Reset token error:", error);
-//     res.status(500).json({ message: "Server error" });
-//   }
-// };
-
 export const requestPasswordReset = async (req: Request, res: Response) => {
   try {
     const { email } = req.body;
@@ -1343,5 +1351,53 @@ export const deleteAnnouncement = async (req: Request, res: Response) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Failed to delete announcement." });
+  }
+};
+
+//Generate Token and Referesh Token?
+
+export const refreshAccessToken = async (req: Request, res: Response) => {
+  try {
+    const refreshToken = req.cookies.refreshToken;
+
+    if (!refreshToken) {
+      return res.status(401).json({ message: "Refresh token missing." });
+    }
+
+    const decoded = jwt.verify(
+      refreshToken,
+      process.env.JWT_REFRESH_SECRET_KEY as string
+    ) as { useId: number };
+
+    const user = await prisma.user.findUnique({ where: { id: decoded.useId } });
+
+    if (!user) {
+      return res.status(403).json({ message: "User not found." });
+    }
+
+    const accessPayload = {
+      useId: user.id,
+      userName: user.username,
+      joined_at: user.createdAt,
+      role: user.role,
+    };
+
+    const newAccessToken = jwt.sign(
+      accessPayload,
+      process.env.JWT_SECRET_KEY as string,
+      {
+        issuer: "Api.Irshaad.com",
+        expiresIn: "5m", // or 15m
+      }
+    );
+
+    return res.status(200).json({
+      Access_token: newAccessToken, // ✅ exact format you asked for
+    });
+  } catch (error) {
+    console.error("Refresh error:", error);
+    return res
+      .status(403)
+      .json({ message: "Invalid or expired refresh token." });
   }
 };

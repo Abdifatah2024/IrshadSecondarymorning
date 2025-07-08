@@ -2,6 +2,7 @@ import { Router } from "express";
 import {
   createEmployeeAdvanceAndUpdateIncome,
   deleteEmployeeAdvance,
+  getAllEmployeesAdnace,
   getEmployeeAdvances,
   getEmployeeAdvancesDetail,
   getEmployeeSalaryAdvanceBalance,
@@ -25,5 +26,6 @@ router.put("/employee-advances/:id", authenticate, updateEmployeeAdvance);
 // DELETE /api/employee-advances/:id
 router.delete("/employee-advances/:id", authenticate, deleteEmployeeAdvance);
 router.get("/employee-balance", getEmployeeSalaryAdvanceBalance);
+router.get("/All/employee-balance", getAllEmployeesAdnace);
 router.get("/employee-advanceDetail", getEmployeeAdvancesDetail);
 export default router;

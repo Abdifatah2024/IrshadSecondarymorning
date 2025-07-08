@@ -4,11 +4,11 @@ import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
-// Income Statement: Revenue - Discounts - Advances - Expenses = Net Income
 // export const getIncomeStatement = async (req: Request, res: Response) => {
 //   try {
 //     const month = Number(req.query.month);
 //     const year = Number(req.query.year);
+
 //     if (!month || !year) {
 //       return res.status(400).json({ message: "Month and year are required." });
 //     }
@@ -16,47 +16,54 @@ const prisma = new PrismaClient();
 //     const startDate = new Date(year, month - 1, 1);
 //     const endDate = new Date(year, month, 0, 23, 59, 59, 999);
 
+//     // Fetch payments (includes amountPaid and discount)
 //     const payments = await prisma.payment.findMany({
 //       where: { date: { gte: startDate, lte: endDate } },
 //       select: { amountPaid: true, discount: true },
 //     });
 
-//     const totalRevenue = payments.reduce(
+//     const netRevenue = payments.reduce(
 //       (sum, p) => sum + Number(p.amountPaid),
 //       0
 //     );
+
 //     const totalDiscounts = payments.reduce(
-//       (sum, p) => sum + Number(p.discount),
+//       (sum, p) => sum + Number(p.discount || 0),
 //       0
 //     );
 
+//     const totalRevenue = netRevenue + totalDiscounts; // ✅ as per your requirement
+
+//     // Fetch employee advances
 //     const advances = await prisma.employeeAdvance.findMany({
 //       where: { month, year },
 //       select: { amount: true },
 //     });
+
 //     const totalAdvances = advances.reduce(
 //       (sum, a) => sum + Number(a.amount),
 //       0
 //     );
 
+//     // Fetch expenses
 //     const expenses = await prisma.expense.findMany({
 //       where: { date: { gte: startDate, lte: endDate } },
 //       select: { amount: true },
 //     });
+
 //     const totalExpenses = expenses.reduce(
 //       (sum, e) => sum + Number(e.amount),
 //       0
 //     );
 
-//     const netRevenue = totalRevenue - totalDiscounts;
 //     const netIncome = netRevenue - totalAdvances - totalExpenses;
 
 //     res.status(200).json({
 //       month,
 //       year,
-//       totalRevenue,
+//       totalRevenue, // = netRevenue + discount
 //       totalDiscounts,
-//       netRevenue,
+//       netRevenue, // only amountPaid
 //       totalAdvances,
 //       totalExpenses,
 //       netIncome,
@@ -66,6 +73,9 @@ const prisma = new PrismaClient();
 //     res.status(500).json({ message: "Internal server error." });
 //   }
 // };
+
+// Balance Sheet: Assets = Carry Forward, Liabilities = Unpaid Fees, Equity = A - L
+
 export const getIncomeStatement = async (req: Request, res: Response) => {
   try {
     const month = Number(req.query.month);
@@ -78,56 +88,90 @@ export const getIncomeStatement = async (req: Request, res: Response) => {
     const startDate = new Date(year, month - 1, 1);
     const endDate = new Date(year, month, 0, 23, 59, 59, 999);
 
-    // Fetch payments (includes amountPaid and discount)
-    const payments = await prisma.payment.findMany({
-      where: { date: { gte: startDate, lte: endDate } },
-      select: { amountPaid: true, discount: true },
+    // Fetch allocations where the PAYMENT DATE is within the selected month
+    const allocations = await prisma.paymentAllocation.findMany({
+      where: {
+        payment: {
+          date: {
+            gte: startDate,
+            lte: endDate,
+          },
+        },
+      },
+      include: {
+        payment: true,
+        studentFee: true,
+      },
     });
 
-    const netRevenue = payments.reduce(
-      (sum, p) => sum + Number(p.amountPaid),
-      0
-    );
+    let currentIncome = 0;
+    let previousIncome = 0;
+    let advanceIncome = 0;
 
-    const totalDiscounts = payments.reduce(
+    allocations.forEach((alloc) => {
+      const allocMonth = alloc.studentFee.month;
+      const allocYear = alloc.studentFee.year;
+      const amount = Number(alloc.amount);
+
+      if (allocYear === year && allocMonth === month) {
+        currentIncome += amount;
+      } else if (
+        allocYear < year ||
+        (allocYear === year && allocMonth < month)
+      ) {
+        previousIncome += amount;
+      } else {
+        advanceIncome += amount;
+      }
+    });
+
+    const totalRevenue = currentIncome + previousIncome + advanceIncome;
+
+    // Discounts applied during this month
+    const discounts = await prisma.payment.findMany({
+      where: {
+        date: { gte: startDate, lte: endDate },
+      },
+      select: { discount: true },
+    });
+
+    const totalDiscounts = discounts.reduce(
       (sum, p) => sum + Number(p.discount || 0),
       0
     );
 
-    const totalRevenue = netRevenue + totalDiscounts; // ✅ as per your requirement
-
-    // Fetch employee advances
     const advances = await prisma.employeeAdvance.findMany({
       where: { month, year },
       select: { amount: true },
     });
-
-    const totalAdvances = advances.reduce(
+    const totalEmployeeAdvances = advances.reduce(
       (sum, a) => sum + Number(a.amount),
       0
     );
 
-    // Fetch expenses
     const expenses = await prisma.expense.findMany({
       where: { date: { gte: startDate, lte: endDate } },
       select: { amount: true },
     });
-
     const totalExpenses = expenses.reduce(
       (sum, e) => sum + Number(e.amount),
       0
     );
 
-    const netIncome = netRevenue - totalAdvances - totalExpenses;
+    const netRevenue = totalRevenue - totalDiscounts;
+    const netIncome = netRevenue - totalExpenses - totalEmployeeAdvances;
 
     res.status(200).json({
       month,
       year,
-      totalRevenue, // = netRevenue + discount
+      currentIncome,
+      previousIncome,
+      advanceIncome,
+      totalRevenue,
       totalDiscounts,
-      netRevenue, // only amountPaid
-      totalAdvances,
+      netRevenue,
       totalExpenses,
+      totalEmployeeAdvances,
       netIncome,
     });
   } catch (error) {
@@ -136,7 +180,6 @@ export const getIncomeStatement = async (req: Request, res: Response) => {
   }
 };
 
-// Balance Sheet: Assets = Carry Forward, Liabilities = Unpaid Fees, Equity = A - L
 export const getBalanceSheet = async (_req: Request, res: Response) => {
   try {
     const students = await prisma.student.findMany({

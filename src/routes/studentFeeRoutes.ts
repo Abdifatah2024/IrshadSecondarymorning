@@ -28,14 +28,17 @@ import {
   checkIfPaymentNumberAlreadyUsed,
   checkLastPaymentByNumber,
   payFullForMonthByStudent,
+  searchStudentsByNameOrId,
+  getUserPaymentCollections,
 } from "../controller/PaymentContorller";
 import { authenticate } from "../middlewares/authaniticator";
 
 const router = express.Router();
 
 // Generate monthly fees for all studentss
-router.get("/students/balance-summaries", getAllStudentAccountSummaries);
 
+router.get("/students/balance-summaries", getAllStudentAccountSummaries);
+router.get("/students/search", searchStudentsByNameOrId);
 router.post("/generate-monthly-fees", generateMonthlyFees);
 router.get("/StudentWithBalance", getStudentsWithUnpaidFeesOrBalance);
 // Get all fees for a student (by ID)
@@ -69,4 +72,6 @@ router.post("/pay-full-month", authenticate, payFullForMonthByPhone);
 router.post("/check-payment-number", checkIfPaymentNumberAlreadyUsed);
 router.post("/payment/check-last-used-number", checkLastPaymentByNumber);
 router.post("/payment/student", authenticate, payFullForMonthByStudent);
+router.get("/payments/collection-summary", getUserPaymentCollections);
+
 export default router;

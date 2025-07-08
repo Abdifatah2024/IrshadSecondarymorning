@@ -2489,3 +2489,431 @@ export const listUntransferredStudents = async (
     });
   }
 };
+
+export const absentReport = async (req: Request, res: Response) => {
+  try {
+    // Optional: date filtering from query parameters
+    const { startDate, endDate } = req.query;
+
+    const dateFilter: any = {};
+    if (startDate) dateFilter.gte = new Date(startDate as string);
+    if (endDate) dateFilter.lte = new Date(endDate as string);
+
+    const whereClause = {
+      present: false, // Only absences
+      ...(startDate || endDate ? { date: dateFilter } : {}),
+    };
+
+    // Fetch absent attendance records
+    const absentRecords = await prisma.attendance.findMany({
+      where: whereClause,
+      include: {
+        student: {
+          include: {
+            classes: true, // get class name
+          },
+        },
+        user: true, // user who recorded the attendance
+      },
+      orderBy: {
+        date: "desc",
+      },
+    });
+
+    // Format data for the report
+    const report = absentRecords.map((record) => ({
+      date: record.date,
+      remark: record.remark,
+      callStatus: record.callStatus,
+      callTime: record.callTime,
+      callNotes: record.callNotes,
+
+      studentFullName: record.student.fullname,
+      className: record.student.classes.name,
+      phone: record.student.phone,
+      phone2: record.student.phone2,
+      studentId: record.student.id,
+
+      recordedBy: record.user.fullName,
+    }));
+
+    return res.status(200).json({
+      total: report.length,
+      report,
+    });
+  } catch (error) {
+    console.error("Absent report error:", error);
+    return res.status(500).json({
+      message: "An unexpected error occurred while generating the report.",
+    });
+  } finally {
+    await prisma.$disconnect();
+  }
+};
+
+/**
+ * Controller to update call info for a student's attendance record.
+ */
+export const updateAttendanceCallInfoHandler = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const { studentId, date, callTime, callStatus, callNotes } = req.body;
+
+    if (!studentId || !date || !callStatus) {
+      return res.status(400).json({
+        message: "studentId, date, and callStatus are required.",
+      });
+    }
+
+    // Find the attendance record
+    const attendance = await prisma.attendance.findFirst({
+      where: {
+        studentId: Number(studentId),
+        date: new Date(date),
+      },
+    });
+
+    if (!attendance) {
+      return res.status(404).json({
+        message: `No attendance record found for studentId=${studentId} on date=${date}`,
+      });
+    }
+
+    // Update the record
+    const updatedRecord = await prisma.attendance.update({
+      where: { id: attendance.id },
+      data: {
+        callTime: callTime ? new Date(callTime) : new Date(),
+        callStatus,
+        callNotes,
+      },
+    });
+
+    return res.status(200).json({
+      message: "Call information updated successfully.",
+      data: updatedRecord,
+    });
+  } catch (error) {
+    console.error("Error updating attendance call info:", error);
+    return res.status(500).json({
+      message: "An unexpected error occurred.",
+    });
+  } finally {
+    await prisma.$disconnect();
+  }
+};
+export const getClassAttendanceSummary = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    // Read month and year from query
+    const { month, year } = req.query;
+
+    // Validate month and year
+    if (!month || !year) {
+      return res.status(400).json({
+        message: "Query parameters 'month' and 'year' are required.",
+      });
+    }
+
+    const monthNum = parseInt(month as string);
+    const yearNum = parseInt(year as string);
+
+    if (isNaN(monthNum) || isNaN(yearNum) || monthNum < 1 || monthNum > 12) {
+      return res.status(400).json({
+        message: "Invalid 'month' or 'year' parameter.",
+      });
+    }
+
+    // Calculate date range
+    const startDate = new Date(Date.UTC(yearNum, monthNum - 1, 1));
+    const endDate = new Date(Date.UTC(yearNum, monthNum, 1));
+
+    // Get all classes
+    const classes = await prisma.classes.findMany({
+      include: {
+        Student: {
+          where: { isdeleted: false },
+          select: {
+            id: true,
+            fullname: true,
+          },
+        },
+      },
+    });
+
+    // For each class, calculate attendance stats within the date range
+    const result = await Promise.all(
+      classes.map(async (cls) => {
+        let totalPresent = 0;
+        let totalAbsent = 0;
+
+        const studentsWithCounts = await Promise.all(
+          cls.Student.map(async (student) => {
+            const presentCount = await prisma.attendance.count({
+              where: {
+                studentId: student.id,
+                present: true,
+                date: {
+                  gte: startDate,
+                  lt: endDate,
+                },
+              },
+            });
+
+            const absentCount = await prisma.attendance.count({
+              where: {
+                studentId: student.id,
+                present: false,
+                date: {
+                  gte: startDate,
+                  lt: endDate,
+                },
+              },
+            });
+
+            totalPresent += presentCount;
+            totalAbsent += absentCount;
+
+            return {
+              studentId: student.id,
+              fullname: student.fullname,
+              presentCount,
+              absentCount,
+              totalRecords: presentCount + absentCount,
+              attendanceRate:
+                presentCount + absentCount > 0
+                  ? (
+                      (presentCount / (presentCount + absentCount)) *
+                      100
+                    ).toFixed(2) + "%"
+                  : "N/A",
+            };
+          })
+        );
+
+        const overallTotal = totalPresent + totalAbsent;
+        const overallRate =
+          overallTotal > 0
+            ? ((totalPresent / overallTotal) * 100).toFixed(2) + "%"
+            : "N/A";
+
+        return {
+          classId: cls.id,
+          className: cls.name,
+          totalStudents: cls.Student.length,
+          totalPresentDays: totalPresent,
+          totalAbsentDays: totalAbsent,
+          overallAttendanceRate: overallRate,
+          students: studentsWithCounts,
+        };
+      })
+    );
+
+    res.status(200).json({
+      success: true,
+      month: monthNum,
+      year: yearNum,
+      data: result,
+    });
+  } catch (error) {
+    console.error("Error generating class attendance summary:", error);
+    res.status(500).json({
+      message: "Server error while generating class attendance summary",
+    });
+  }
+};
+
+export const getDailyAttendanceOverview = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const { date } = req.query;
+
+    if (!date) {
+      return res.status(400).json({
+        message: "Query parameter 'date' is required (YYYY-MM-DD).",
+      });
+    }
+
+    const targetDate = new Date(date as string);
+    if (isNaN(targetDate.getTime())) {
+      return res.status(400).json({ message: "Invalid date format." });
+    }
+
+    const startOfDay = new Date(
+      Date.UTC(
+        targetDate.getUTCFullYear(),
+        targetDate.getUTCMonth(),
+        targetDate.getUTCDate()
+      )
+    );
+    const endOfDay = new Date(startOfDay);
+    endOfDay.setUTCDate(endOfDay.getUTCDate() + 1);
+
+    // Get all attendance records on that day
+    const records = await prisma.attendance.findMany({
+      where: {
+        date: {
+          gte: startOfDay,
+          lt: endOfDay,
+        },
+      },
+      include: {
+        student: {
+          select: {
+            id: true,
+            fullname: true,
+            classId: true,
+            classes: {
+              select: { name: true },
+            },
+          },
+        },
+        user: {
+          select: {
+            id: true,
+            fullName: true,
+          },
+        },
+      },
+      orderBy: {
+        student: {
+          classId: "asc",
+        },
+      },
+    });
+
+    // Group records by class
+    const grouped: Record<
+      string,
+      {
+        classId: number;
+        className: string;
+        records: {
+          studentId: number;
+          fullname: string;
+          status: "Present" | "Absent";
+          remark: string;
+          recordedBy: string;
+        }[];
+      }
+    > = {};
+
+    records.forEach((rec) => {
+      const classKey = `${rec.student.classId}-${
+        rec.student.classes?.name ?? "Unknown"
+      }`;
+
+      if (!grouped[classKey]) {
+        grouped[classKey] = {
+          classId: rec.student.classId,
+          className: rec.student.classes?.name ?? "Unknown",
+          records: [],
+        };
+      }
+
+      grouped[classKey].records.push({
+        studentId: rec.student.id,
+        fullname: rec.student.fullname,
+        status: rec.present ? "Present" : "Absent",
+        remark: rec.remark ?? "",
+        recordedBy: rec.user?.fullName ?? "Unknown",
+      });
+    });
+
+    res.status(200).json({
+      success: true,
+      date: startOfDay.toISOString().split("T")[0],
+      classes: Object.values(grouped),
+    });
+  } catch (error) {
+    console.error("Error generating daily attendance overview:", error);
+    res.status(500).json({
+      message: "Server error while generating daily attendance overview",
+    });
+  }
+};
+
+export const getClassMonthlyAttendanceSummary = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const { classId } = req.params;
+    const { year } = req.query;
+
+    if (!classId) {
+      return res.status(400).json({ message: "classId is required" });
+    }
+
+    const targetYear = year ? Number(year) : new Date().getFullYear();
+
+    // 1️⃣ Get all students in the class
+    const students = await prisma.student.findMany({
+      where: {
+        classId: Number(classId),
+        isdeleted: false,
+      },
+      select: {
+        id: true,
+        fullname: true,
+      },
+    });
+
+    const summary = [];
+
+    for (const student of students) {
+      const records = await prisma.attendance.findMany({
+        where: {
+          studentId: student.id,
+          date: {
+            gte: new Date(`${targetYear}-01-01`),
+            lte: new Date(`${targetYear}-12-31`),
+          },
+        },
+      });
+
+      const months = Array.from({ length: 12 }, (_, i) => ({
+        month: i + 1,
+        presentCount: 0,
+        absentCount: 0,
+      }));
+
+      let totalAbsentCount = 0;
+
+      records.forEach((rec) => {
+        const m = new Date(rec.date).getMonth();
+        if (rec.present) {
+          months[m].presentCount++;
+        } else {
+          months[m].absentCount++;
+          totalAbsentCount++;
+        }
+      });
+
+      summary.push({
+        studentId: student.id,
+        fullname: student.fullname,
+        totalAbsentCount,
+        monthly: months,
+      });
+    }
+
+    // 2️⃣ Sort descending by total absences
+    summary.sort((a, b) => b.totalAbsentCount - a.totalAbsentCount);
+
+    res.status(200).json({
+      classId: Number(classId),
+      year: targetYear,
+      summary,
+    });
+  } catch (error) {
+    console.error("Error fetching class monthly attendance summary:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};

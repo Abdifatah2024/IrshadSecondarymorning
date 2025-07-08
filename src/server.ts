@@ -11,28 +11,39 @@ import FeeRouter from "./routes/studentFeeRoutes";
 import AdvanceRouter from "./routes/EmployeeAdvanceRoute";
 import expenseRoutes from "./routes/expenseRoutes";
 import FinanacialRoutes from "./routes/financialReports";
+import assetRoutes from "./routes/assetRoutes";
 import cors from "cors";
 import path from "path";
 import workPlanRoutes from "./routes/workPlanRoutes";
+import smsRoutes from "./routes/sms.route";
+import paymentVoucherRouter from "./routes/paymentVoucher.routes";
+import cookieParser from "cookie-parser";
 
 // import morgan from "morgan";
 const app = express();
 
 // Middleware
 app.use(express.json());
+app.use(cookieParser());
+// app.use(
+//   cors({
+//     origin: [
+//       "http://localhost:5173",
+//       "https://school-backend-system-1.onrender.com",
+//     ],
+//     credentials: true,
+//     methods: ["GET", "POST", "PUT", "DELETE"],
+//   })
+// );
+
+// Fix 1: Add proper port handling
 app.use(
   cors({
-    origin: [
-      "http://localhost:5173",
-      "https://school-backend-system-1.onrender.com",
-      "",
-    ],
+    origin: "http://localhost:5173", // ✅ exact origin only
     credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE"],
   })
 );
 
-// Fix 1: Add proper port handling
 const port = process.env.PORT ? parseInt(process.env.PORT) : 3000; // Convert to number and add fallback
 
 // Fix 2: Add basic health check endpoint
@@ -51,6 +62,9 @@ app.use("/EmployeeAdvance", AdvanceRouter);
 app.use("/expenses", expenseRoutes);
 app.use("/financial/Reports", FinanacialRoutes);
 app.use("/api/workplans", workPlanRoutes);
+app.use("/Api/Sms", smsRoutes);
+app.use("/Asset", assetRoutes);
+app.use("/Voucher", paymentVoucherRouter);
 app.use(
   "/uploads",
   express.static(path.join(__dirname, "../uploads"), {

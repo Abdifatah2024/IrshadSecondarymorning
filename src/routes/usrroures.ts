@@ -37,6 +37,8 @@ import {
   getAllAnnouncementsForAdmin,
   updateAnnouncement,
   deleteAnnouncement,
+  refreshAccessToken,
+  // refreshAccessToken,
 } from "../controller/user.controller";
 
 import {
@@ -50,6 +52,7 @@ const router = Router();
 router.post("/register", register);
 router.post("/login", login);
 router.get("/whoami", authenticate, whoami);
+router.post("/auth/refresh", refreshAccessToken);
 
 /* ---------------------------- User CRUD ---------------------------- */
 router.get("/userinfo/:id", userinfo);

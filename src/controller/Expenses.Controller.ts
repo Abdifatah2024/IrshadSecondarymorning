@@ -7,14 +7,30 @@ export const createExpense = async (req: Request, res: Response) => {
   try {
     const { category, amount, date, paymentMethod, description, approvedBy } =
       req.body;
+
     //@ts-ignore
     const userId = req.user?.useId;
+
     const expenseDate = new Date(date);
     const month = expenseDate.getMonth() + 1;
     const year = expenseDate.getFullYear();
 
-    if (!category || !amount || amount <= 0 || !paymentMethod) {
+    if (!category || !amount || amount <= 0 || !paymentMethod || !date) {
       return res.status(400).json({ message: "Invalid fields." });
+    }
+
+    // ✅ New: Block expenses not in current month/year
+    const now = new Date();
+    const currentMonth = now.getMonth() + 1;
+    const currentYear = now.getFullYear();
+
+    if (month !== currentMonth || year !== currentYear) {
+      return res.status(400).json({
+        message: "Expenses can only be created for the current month and year.",
+        currentMonth,
+        currentYear,
+        attempted: { month, year },
+      });
     }
 
     const financials = await getMonthlyFinancialStatus(month, year, prisma);
@@ -43,6 +59,7 @@ export const createExpense = async (req: Request, res: Response) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
 export const getExpenses = async (req: Request, res: Response) => {
   try {
     const expenses = await prisma.expense.findMany({
@@ -97,12 +114,30 @@ export const updateExpense = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Invalid input fields" });
     }
 
+    // ✅ Check for current month/year only
+    const newDate = new Date(date);
+    const inputMonth = newDate.getMonth() + 1;
+    const inputYear = newDate.getFullYear();
+
+    const now = new Date();
+    const currentMonth = now.getMonth() + 1;
+    const currentYear = now.getFullYear();
+
+    if (inputMonth !== currentMonth || inputYear !== currentYear) {
+      return res.status(400).json({
+        message: "You can only update expenses to the current month and year.",
+        currentMonth,
+        currentYear,
+        attempted: { inputMonth, inputYear },
+      });
+    }
+
     const updated = await prisma.expense.update({
       where: { id },
       data: {
         category,
         amount,
-        date: new Date(date),
+        date: newDate,
         description,
         paymentMethod,
         approvedBy,
@@ -116,6 +151,7 @@ export const updateExpense = async (req: Request, res: Response) => {
     res.status(500).json({ message: "Internal server error" });
   }
 };
+
 export const deleteExpense = async (req: Request, res: Response) => {
   try {
     const id = Number(req.params.id);
@@ -123,6 +159,25 @@ export const deleteExpense = async (req: Request, res: Response) => {
     const existing = await prisma.expense.findUnique({ where: { id } });
     if (!existing) {
       return res.status(404).json({ message: "Expense not found" });
+    }
+
+    // ✅ Only allow deletion if expense date is in current month/year
+    const expenseDate = new Date(existing.date);
+    const expenseMonth = expenseDate.getMonth() + 1;
+    const expenseYear = expenseDate.getFullYear();
+
+    const now = new Date();
+    const currentMonth = now.getMonth() + 1;
+    const currentYear = now.getFullYear();
+
+    if (expenseMonth !== currentMonth || expenseYear !== currentYear) {
+      return res.status(400).json({
+        message:
+          "You can only delete expenses from the current month and year.",
+        currentMonth,
+        currentYear,
+        attempted: { expenseMonth, expenseYear },
+      });
     }
 
     await prisma.expense.delete({ where: { id } });
@@ -133,78 +188,6 @@ export const deleteExpense = async (req: Request, res: Response) => {
   }
 };
 
-// export const getMonthlyBalance = async (req: Request, res: Response) => {
-//   try {
-//     const month = parseInt(req.query.month as string);
-//     const year = parseInt(req.query.year as string);
-
-//     if (!month || !year) {
-//       return res.status(400).json({ message: "Month and Year are required." });
-//     }
-
-//     const startDate = new Date(year, month - 1, 1);
-//     const endDate = new Date(year, month, 0, 23, 59, 59, 999);
-
-//     // Total income
-//     const allocations = await prisma.paymentAllocation.findMany({
-//       where: {
-//         payment: {
-//           date: {
-//             gte: startDate,
-//             lte: endDate,
-//           },
-//         },
-//       },
-//       select: { amount: true },
-//     });
-
-//     const totalIncome = allocations.reduce(
-//       (sum, alloc) => sum + Number(alloc.amount),
-//       0
-//     );
-
-//     // Total advance
-//     const advances = await prisma.employeeAdvance.findMany({
-//       where: { month, year },
-//       select: { amount: true },
-//     });
-
-//     const totalAdvance = advances.reduce(
-//       (sum, adv) => sum + Number(adv.amount),
-//       0
-//     );
-
-//     // Total expense
-//     const expenses = await prisma.expense.findMany({
-//       where: {
-//         date: {
-//           gte: startDate,
-//           lte: endDate,
-//         },
-//       },
-//       select: { amount: true },
-//     });
-
-//     const totalExpense = expenses.reduce(
-//       (sum, exp) => sum + Number(exp.amount),
-//       0
-//     );
-
-//     const used = totalAdvance + totalExpense;
-//     const remaining = totalIncome - used;
-
-//     return res.status(200).json({
-//       totalIncome,
-//       totalAdvance,
-//       totalExpense,
-//       used,
-//       remaining,
-//     });
-//   } catch (error) {
-//     console.error("Error calculating balance:", error);
-//     return res.status(500).json({ message: "Internal server error" });
-//   }
-// };
 export const getMonthlyBalance = async (req: Request, res: Response) => {
   try {
     const month = parseInt(req.query.month as string);

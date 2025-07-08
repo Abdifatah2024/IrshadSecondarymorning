@@ -45,6 +45,11 @@ import {
   getStudentsWithoutBus,
   updateStudentTransferAndRollNumber,
   listUntransferredStudents,
+  absentReport,
+  updateAttendanceCallInfoHandler,
+  getClassAttendanceSummary,
+  getDailyAttendanceOverview,
+  getClassMonthlyAttendanceSummary,
 } from "../controller/StudentsRegister";
 
 import { getYearlyProgressReportByStudent } from "../controller/exam.controller";
@@ -60,6 +65,7 @@ router.post(
   authenticate,
   createMultipleStudentsByExcel
 );
+router.put("/call-info", updateAttendanceCallInfoHandler);
 router.put("/updateClass", authenticate, updateStudentClass);
 router.put("/updateClass", authenticate, updateStudentClass);
 router.put("/:id", authenticate, updateStudent);
@@ -129,11 +135,19 @@ router.put("/student/update-parent", updateStudentParent);
 router.get("/students/same-bus/:bus", getStudentsWithSameBus);
 router.get("/students/by-parent-phone", getLastStudentByParentPhone);
 router.get("/students/with-bus", getStudentsWithBus);
+
 router.get("/students/without-bus", getStudentsWithoutBus);
 router.put(
   "/students/update-transfer-roll",
   updateStudentTransferAndRollNumber
 );
 router.get("/students/untransferred", listUntransferredStudents);
+router.get("/attendance/report", absentReport);
+router.get("/reports/class-attendance-summary", getClassAttendanceSummary);
+router.get("/reports/daily-attendance-overview", getDailyAttendanceOverview);
+router.get(
+  "/class-monthly-attendance-summary/:classId",
+  getClassMonthlyAttendanceSummary
+);
 
 export default router;

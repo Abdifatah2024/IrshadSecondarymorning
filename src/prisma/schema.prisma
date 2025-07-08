@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -32,7 +29,7 @@ enum StudentStatus {
 
 enum SchoolType {
   PRIVATE
-  PUBLICs
+  PUBLIC
   NOT_SPECIFIC
 }
 
@@ -297,6 +294,18 @@ model StudentAccount {
   updatedAt    DateTime @updatedAt
 }
 
+// model Attendance {
+//   id          Int      @id @default(autoincrement())
+//   date        DateTime @default(now())
+//   present     Boolean
+//   remark      String?
+//   studentId   Int
+//   userId      Int
+//   absentCount Int?
+//   created_at  DateTime @default(now())
+//   student     Student  @relation(fields: [studentId], references: [id])
+//   user        User     @relation(fields: [userId], references: [id])
+// }
 model Attendance {
   id          Int      @id @default(autoincrement())
   date        DateTime @default(now())
@@ -306,8 +315,14 @@ model Attendance {
   userId      Int
   absentCount Int?
   created_at  DateTime @default(now())
-  student     Student  @relation(fields: [studentId], references: [id])
-  user        User     @relation(fields: [userId], references: [id])
+
+  // Parent call info directly in this model
+  callTime   DateTime? // Null if no call was made
+  callStatus String? // e.g. "Completed", "Missed", "No Answer"
+  callNotes  String? // Notes about the call
+
+  student Student @relation(fields: [studentId], references: [id])
+  user    User    @relation(fields: [userId], references: [id])
 }
 
 enum ExamType {
@@ -518,4 +533,21 @@ model WorkPlanComment {
   // Relations
   workPlan WorkPlan @relation(fields: [workPlanId], references: [id])
   user     User     @relation(fields: [userId], references: [id])
+}
+
+model Asset {
+  id               Int      @id @default(autoincrement())
+  name             String
+  category         String
+  purchaseDate     DateTime
+  purchasePrice    Float
+  depreciationRate Float // e.g., 10 (%) per year
+  currentValue     Float // auto-calculated or updated manually
+  purchaseCompany  String? // vendor name
+  condition        String
+  location         String
+  assignedTo       String?
+  serialNumber     String?
+  remarks          String?
+  createdAt        DateTime @default(now())
 }
