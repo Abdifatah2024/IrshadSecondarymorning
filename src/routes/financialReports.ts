@@ -7,6 +7,8 @@ import {
   getStudentsWithUnpaidFeesOrBalance,
   getCombinedPayments,
   getTodayIncome,
+  getYearlyIncomeStatement,
+  getQuarterlyIncomeStatement,
 } from "../controller/financialReportsController";
 
 const router = Router();
@@ -20,5 +22,8 @@ router.get("/cash-flow", getCashFlowStatement); // /api/financial/cash-flow
 router.get("/unpaid-summary", getStudentsWithUnpaidFeesOrBalance); // /api/financial/unpaid-summary
 router.get("/monthly-summary", getCombinedPayments); // /api/financial/monthly-summary
 router.get("/today-income", getTodayIncome); // /api/financial/today-income
+router.get("/IncomeStatement/wholeyear", getYearlyIncomeStatement);
+// routes/financeRoutes.ts
+router.get("/income-statement-quarter", getQuarterlyIncomeStatement);
 
 export default router;

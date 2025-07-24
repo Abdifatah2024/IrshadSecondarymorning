@@ -50,6 +50,11 @@ import {
   getClassAttendanceSummary,
   getDailyAttendanceOverview,
   getClassMonthlyAttendanceSummary,
+  getBusStudentsWithZeroBusFee,
+  softDeleteStudent,
+  listDeletedStudents,
+  restoreDeletedStudent,
+  listRestoredStudents,
 } from "../controller/StudentsRegister";
 
 import { getYearlyProgressReportByStudent } from "../controller/exam.controller";
@@ -57,6 +62,8 @@ import { getYearlyProgressReportByStudent } from "../controller/exam.controller"
 const router = Router();
 
 /* ----------------------------- Student CRUD ----------------------------- */
+router.put("/restore", authenticate, restoreDeletedStudent);
+router.get("/students/restored", authenticate, listRestoredStudents);
 router.post("/create", authenticate, createStudent);
 router.post("/createMultiple", authenticate, createMultipleStudents);
 router.post(
@@ -135,7 +142,8 @@ router.put("/student/update-parent", updateStudentParent);
 router.get("/students/same-bus/:bus", getStudentsWithSameBus);
 router.get("/students/by-parent-phone", getLastStudentByParentPhone);
 router.get("/students/with-bus", getStudentsWithBus);
-
+router.get("/students/with-bus/Zero", getBusStudentsWithZeroBusFee);
+router.post("/soft-delete", authenticate, softDeleteStudent);
 router.get("/students/without-bus", getStudentsWithoutBus);
 router.put(
   "/students/update-transfer-roll",
@@ -149,5 +157,6 @@ router.get(
   "/class-monthly-attendance-summary/:classId",
   getClassMonthlyAttendanceSummary
 );
+router.get("/Soft/deleted", authenticate, listDeletedStudents);
 
 export default router;

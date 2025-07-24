@@ -19,6 +19,7 @@ enum Role {
   Teacher
   PARENT
   PENDING
+  ACADEMY // ✅ Corrected and clean
 }
 
 enum StudentStatus {
@@ -64,28 +65,33 @@ model User {
   parentStudents     Student[] @relation("ParentRelation")
 
   // ✅ Other Relations (unchanged)
-  approvedDiscounts DiscountLog[]       @relation("ApprovedDiscounts")
-  role              Role                @default(USER)
-  notes             note[]
-  tasks             task[]
-  classes           classes[]
-  StudentFee        StudentFee[]
-  Attendance        Attendance[]
-  Score             Score[]
-  Discipline        Discipline[]
-  Employee          Employee[]
-  DisciplineComment DisciplineComment[]
-  Payment           Payment[]
-  TeacherAssignment TeacherAssignment[]
-  TeacherClass      TeacherClass[]
-  EmployeeAdvance   EmployeeAdvance[]
-  Expense           Expense[]
-  DiscountLog       DiscountLog[]
-  Document          Document[]
-  Announcement      Announcement[]
-  assignedWorkPlans WorkPlan[]          @relation("AssignedWorkPlans")
-  reviewedWorkPlans WorkPlan[]          @relation("ReviewedWorkPlans")
-  WorkPlanComment   WorkPlanComment[]
+  approvedDiscounts  DiscountLog[]        @relation("ApprovedDiscounts")
+  role               Role                 @default(USER)
+  notes              note[]
+  tasks              task[]
+  classes            classes[]
+  StudentFee         StudentFee[]
+  Attendance         Attendance[]
+  Score              Score[]
+  Discipline         Discipline[]
+  Employee           Employee[]
+  DisciplineComment  DisciplineComment[]
+  Payment            Payment[]
+  TeacherAssignment  TeacherAssignment[]
+  TeacherClass       TeacherClass[]
+  EmployeeAdvance    EmployeeAdvance[]
+  Expense            Expense[]
+  DiscountLog        DiscountLog[]
+  Document           Document[]
+  Announcement       Announcement[]
+  assignedWorkPlans  WorkPlan[]           @relation("AssignedWorkPlans")
+  reviewedWorkPlans  WorkPlan[]           @relation("ReviewedWorkPlans")
+  WorkPlanComment    WorkPlanComment[]
+  StudentDeletionLog StudentDeletionLog[]
+  deletedStudents    StudentDeletionLog[] @relation("DeletedBy")
+  restoredStudents   StudentDeletionLog[] @relation("RestoredBy")
+  ProfitLog          ProfitLog[]
+  CashLedger         CashLedger[]
 }
 
 model Document {
@@ -131,44 +137,6 @@ model classes {
   TeacherClass      TeacherClass[]
 }
 
-// model Student {
-//   id                 Int                 @id @default(autoincrement())
-//   firstname          String
-//   middlename         String
-//   lastname           String
-//   fourtname          String?             @default("Fourt name")
-//   fullname           String
-//   classId            Int
-//   phone              String
-//   phone2             String?
-//   bus                String?
-//   address            String?
-//   previousSchool     String?
-//   previousSchoolType SchoolType          @default(NOT_SPECIFIC) // ✅ Here
-//   motherName         String?
-//   gender             String?
-//   Age                Int
-//   fee                Decimal
-//   familyName         String?
-//   status             StudentStatus?      @default(ACTIVE)
-//   absentCount        Int?                @default(0)
-//   lastWarningDate    DateTime?
-//   isdeleted          Boolean             @default(false)
-//   userid             Int
-//   user               User                @relation(fields: [userid], references: [id])
-//   parentUserId       Int?
-//   parentUser         User?               @relation("ParentRelation", fields: [parentUserId], references: [id])
-//   classes            classes             @relation(fields: [classId], references: [id])
-//   Discipline         Discipline[]
-//   PaymentAllocation  PaymentAllocation[]
-//   Payment            Payment[]
-//   Attendance         Attendance[]
-//   Score              Score[]
-//   StudentFee         StudentFee[]
-//   StudentAccount     StudentAccount?
-//   DiscountLog        DiscountLog[]
-// }
-
 model Student {
   id                 Int            @id @default(autoincrement())
   firstname          String
@@ -191,6 +159,7 @@ model Student {
   Age                Int
   fee                Float
   familyName         String?
+  FreeReason         String?        @default("Fully Sponsored (No bus fee required)")
   status             StudentStatus? @default(ACTIVE)
   absentCount        Int?           @default(0)
   lastWarningDate    DateTime?
@@ -212,14 +181,33 @@ model Student {
   academicYear AcademicYear? @relation(fields: [academicYearId], references: [id])
   classes      classes       @relation(fields: [classId], references: [id])
 
-  Discipline        Discipline[]
-  PaymentAllocation PaymentAllocation[]
-  Payment           Payment[]
-  Attendance        Attendance[]
-  Score             Score[]
-  StudentFee        StudentFee[]
-  StudentAccount    StudentAccount?
-  DiscountLog       DiscountLog[]
+  Discipline         Discipline[]
+  PaymentAllocation  PaymentAllocation[]
+  Payment            Payment[]
+  Attendance         Attendance[]
+  Score              Score[]
+  StudentFee         StudentFee[]
+  StudentAccount     StudentAccount?
+  DiscountLog        DiscountLog[]
+  Bus                Bus?                 @relation(fields: [busId], references: [id])
+  busId              Int?
+  StudentDeletionLog StudentDeletionLog[]
+}
+
+model StudentDeletionLog {
+  id         Int       @id @default(autoincrement())
+  studentId  Int
+  reason     String
+  userId     Int? // User who deleted the student
+  restoredBy Int? // User who restored the student
+  deletedAt  DateTime  @default(now())
+  restoredAt DateTime?
+
+  // Relations
+  Student        Student @relation(fields: [studentId], references: [id])
+  deletedByUser  User?   @relation("DeletedBy", fields: [userId], references: [id], map: "fk_deleted_by_user_custom")
+  restoredByUser User?   @relation("RestoredBy", fields: [restoredBy], references: [id], map: "fk_restored_by_user")
+  User           User?   @relation(fields: [userId], references: [id])
 }
 
 model StudentFee {
@@ -275,6 +263,30 @@ model DiscountLog {
   @@index([month, year])
 }
 
+model MonthlyDiscountLimit {
+  id        Int      @id @default(autoincrement())
+  month     Int // 1-12
+  year      Int
+  maxLimit  Float // Max allowed discount for this month
+  createdAt DateTime @default(now())
+
+  @@unique([month, year])
+}
+
+model Bus {
+  id       Int       @id @default(autoincrement())
+  name     String    @unique // e.g. "Bus 1", "Route A"
+  route    String?
+  plate    String? // 🆕 Plate number
+  type     String? // 🆕 Type of bus (e.g. Minibus, Coach)
+  color    String? // 🆕 Color of the bus
+  seats    Int? // 🆕 Number of seats
+  capacity Int? // Optional, can be same as seats or total capacity
+  driverId Int? // Link to Employee
+  driver   Employee? @relation(fields: [driverId], references: [id])
+  students Student[] // Back relation to Student
+}
+
 model PaymentAllocation {
   id           Int        @id @default(autoincrement())
   paymentId    Int
@@ -294,18 +306,6 @@ model StudentAccount {
   updatedAt    DateTime @updatedAt
 }
 
-// model Attendance {
-//   id          Int      @id @default(autoincrement())
-//   date        DateTime @default(now())
-//   present     Boolean
-//   remark      String?
-//   studentId   Int
-//   userId      Int
-//   absentCount Int?
-//   created_at  DateTime @default(now())
-//   student     Student  @relation(fields: [studentId], references: [id])
-//   user        User     @relation(fields: [userId], references: [id])
-// }
 model Attendance {
   id          Int      @id @default(autoincrement())
   date        DateTime @default(now())
@@ -421,9 +421,12 @@ model Employee {
   createdById Int
   createdBy   User @relation(fields: [createdById], references: [id])
 
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
-  EmployeeAdvance EmployeeAdvance[]
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  EmployeeAdvance     EmployeeAdvance[]
+  Bus                 Bus[]
+  attendancesMarked   EmployeeAttendance[] @relation("MarkedByEmployee")
+  attendancesReceived EmployeeAttendance[] @relation("MarkedEmployee")
 }
 
 model EmployeeAdvance {
@@ -537,6 +540,7 @@ model WorkPlanComment {
 
 model Asset {
   id               Int      @id @default(autoincrement())
+  assetNumber      String   @unique // <-- NEW FIELD
   name             String
   category         String
   purchaseDate     DateTime
@@ -550,4 +554,62 @@ model Asset {
   serialNumber     String?
   remarks          String?
   createdAt        DateTime @default(now())
+}
+
+model EmployeeAttendance {
+  id      Int      @id @default(autoincrement())
+  date    DateTime @default(now())
+  present Boolean
+  remark  String?
+
+  employeeId Int
+  employee   Employee @relation("MarkedEmployee", fields: [employeeId], references: [id])
+
+  markedById Int
+  markedBy   Employee @relation("MarkedByEmployee", fields: [markedById], references: [id])
+
+  createdAt DateTime @default(now())
+}
+
+model ProfitLog {
+  id         Int      @id @default(autoincrement())
+  month      Int // 1-12
+  year       Int
+  closedById Int
+  closedBy   User     @relation(fields: [closedById], references: [id])
+  closedAt   DateTime @default(now())
+
+  currentIncome         Float
+  previousIncome        Float
+  advanceIncome         Float
+  totalRevenue          Float
+  totalDiscounts        Float
+  netRevenue            Float
+  totalExpenses         Float
+  totalEmployeeAdvances Float
+  netIncome             Float
+
+  notes String? // Optional: add a note like "Term 1 closed"
+
+  @@unique([month, year]) // Prevent duplicate closure
+}
+
+model CashLedger {
+  id           Int             @id @default(autoincrement())
+  date         DateTime        @default(now())
+  type         TransactionType // DEPOSIT or WITHDRAWAL
+  source       String // e.g., "ProfitLog", "Donation", "Emergency Expense"
+  referenceId  Int? // e.g., ProfitLog ID
+  amount       Float
+  method       String // e.g., "Bank", "Cash", "Mobile"
+  description  String?
+  balanceAfter Float
+
+  createdById Int
+  createdBy   User @relation(fields: [createdById], references: [id])
+}
+
+enum TransactionType {
+  DEPOSIT
+  WITHDRAWAL
 }

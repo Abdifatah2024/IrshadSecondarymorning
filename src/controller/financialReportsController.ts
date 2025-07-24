@@ -4,78 +4,6 @@ import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
-// export const getIncomeStatement = async (req: Request, res: Response) => {
-//   try {
-//     const month = Number(req.query.month);
-//     const year = Number(req.query.year);
-
-//     if (!month || !year) {
-//       return res.status(400).json({ message: "Month and year are required." });
-//     }
-
-//     const startDate = new Date(year, month - 1, 1);
-//     const endDate = new Date(year, month, 0, 23, 59, 59, 999);
-
-//     // Fetch payments (includes amountPaid and discount)
-//     const payments = await prisma.payment.findMany({
-//       where: { date: { gte: startDate, lte: endDate } },
-//       select: { amountPaid: true, discount: true },
-//     });
-
-//     const netRevenue = payments.reduce(
-//       (sum, p) => sum + Number(p.amountPaid),
-//       0
-//     );
-
-//     const totalDiscounts = payments.reduce(
-//       (sum, p) => sum + Number(p.discount || 0),
-//       0
-//     );
-
-//     const totalRevenue = netRevenue + totalDiscounts; // ✅ as per your requirement
-
-//     // Fetch employee advances
-//     const advances = await prisma.employeeAdvance.findMany({
-//       where: { month, year },
-//       select: { amount: true },
-//     });
-
-//     const totalAdvances = advances.reduce(
-//       (sum, a) => sum + Number(a.amount),
-//       0
-//     );
-
-//     // Fetch expenses
-//     const expenses = await prisma.expense.findMany({
-//       where: { date: { gte: startDate, lte: endDate } },
-//       select: { amount: true },
-//     });
-
-//     const totalExpenses = expenses.reduce(
-//       (sum, e) => sum + Number(e.amount),
-//       0
-//     );
-
-//     const netIncome = netRevenue - totalAdvances - totalExpenses;
-
-//     res.status(200).json({
-//       month,
-//       year,
-//       totalRevenue, // = netRevenue + discount
-//       totalDiscounts,
-//       netRevenue, // only amountPaid
-//       totalAdvances,
-//       totalExpenses,
-//       netIncome,
-//     });
-//   } catch (error) {
-//     console.error("Error generating income statement:", error);
-//     res.status(500).json({ message: "Internal server error." });
-//   }
-// };
-
-// Balance Sheet: Assets = Carry Forward, Liabilities = Unpaid Fees, Equity = A - L
-
 export const getIncomeStatement = async (req: Request, res: Response) => {
   try {
     const month = Number(req.query.month);
@@ -223,6 +151,228 @@ export const getBalanceSheet = async (_req: Request, res: Response) => {
     });
   } catch (error) {
     console.error("Error generating balance sheet:", error);
+    res.status(500).json({ message: "Internal server error." });
+  }
+};
+export const getQuarterlyIncomeStatement = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const quarter = Number(req.query.quarter);
+    const year = Number(req.query.year);
+
+    if (![1, 2, 3, 4].includes(quarter) || !year) {
+      return res
+        .status(400)
+        .json({ message: "Valid quarter (1-4) and year are required." });
+    }
+
+    // Calculate quarter start and end dates
+    const startMonth = (quarter - 1) * 3;
+    const endMonth = startMonth + 2;
+
+    const startDate = new Date(year, startMonth, 1);
+    const endDate = new Date(year, endMonth + 1, 0, 23, 59, 59, 999); // End of last month in quarter
+
+    const allocations = await prisma.paymentAllocation.findMany({
+      where: {
+        payment: {
+          date: {
+            gte: startDate,
+            lte: endDate,
+          },
+        },
+      },
+      include: {
+        payment: true,
+        studentFee: true,
+      },
+    });
+
+    let currentIncome = 0;
+    let previousIncome = 0;
+    let advanceIncome = 0;
+
+    allocations.forEach((alloc) => {
+      const allocMonth = alloc.studentFee.month;
+      const allocYear = alloc.studentFee.year;
+      const amount = Number(alloc.amount);
+
+      const isWithinQuarter =
+        allocYear === year &&
+        allocMonth >= startMonth + 1 &&
+        allocMonth <= endMonth + 1;
+
+      if (isWithinQuarter) {
+        currentIncome += amount;
+      } else if (
+        allocYear < year ||
+        (allocYear === year && allocMonth < startMonth + 1)
+      ) {
+        previousIncome += amount;
+      } else {
+        advanceIncome += amount;
+      }
+    });
+
+    const totalRevenue = currentIncome + previousIncome + advanceIncome;
+
+    const discounts = await prisma.payment.findMany({
+      where: {
+        date: { gte: startDate, lte: endDate },
+      },
+      select: { discount: true },
+    });
+    const totalDiscounts = discounts.reduce(
+      (sum, p) => sum + Number(p.discount || 0),
+      0
+    );
+
+    const advances = await prisma.employeeAdvance.findMany({
+      where: {
+        year,
+        month: {
+          gte: startMonth + 1,
+          lte: endMonth + 1,
+        },
+      },
+      select: { amount: true },
+    });
+    const totalEmployeeAdvances = advances.reduce(
+      (sum, a) => sum + Number(a.amount),
+      0
+    );
+
+    const expenses = await prisma.expense.findMany({
+      where: {
+        date: {
+          gte: startDate,
+          lte: endDate,
+        },
+      },
+      select: { amount: true },
+    });
+    const totalExpenses = expenses.reduce(
+      (sum, e) => sum + Number(e.amount),
+      0
+    );
+
+    const netRevenue = totalRevenue - totalDiscounts;
+    const netIncome = netRevenue - totalExpenses - totalEmployeeAdvances;
+
+    res.status(200).json({
+      quarter,
+      year,
+      currentIncome,
+      previousIncome,
+      advanceIncome,
+      totalRevenue,
+      totalDiscounts,
+      netRevenue,
+      totalExpenses,
+      totalEmployeeAdvances,
+      netIncome,
+      startDate,
+      endDate,
+    });
+  } catch (error) {
+    console.error("Quarterly income error:", error);
+    res.status(500).json({ message: "Internal server error." });
+  }
+};
+
+export const getYearlyIncomeStatement = async (req: Request, res: Response) => {
+  try {
+    const year = Number(req.query.year);
+    if (!year) {
+      return res.status(400).json({ message: "Year is required." });
+    }
+
+    const yearStart = new Date(year, 0, 1);
+    const yearEnd = new Date(year, 11, 31, 23, 59, 59, 999);
+
+    const allocations = await prisma.paymentAllocation.findMany({
+      where: {
+        payment: {
+          date: {
+            gte: yearStart,
+            lte: yearEnd,
+          },
+        },
+      },
+      include: {
+        payment: true,
+        studentFee: true,
+      },
+    });
+
+    let currentIncome = 0;
+    let previousIncome = 0;
+    let advanceIncome = 0;
+
+    allocations.forEach((alloc) => {
+      const allocYear = alloc.studentFee.year;
+      const allocMonth = alloc.studentFee.month;
+      const amount = Number(alloc.amount);
+
+      if (allocYear === year) {
+        currentIncome += amount;
+      } else if (allocYear < year) {
+        previousIncome += amount;
+      } else {
+        advanceIncome += amount;
+      }
+    });
+
+    const totalRevenue = currentIncome + previousIncome + advanceIncome;
+
+    const discounts = await prisma.payment.findMany({
+      where: {
+        date: { gte: yearStart, lte: yearEnd },
+      },
+      select: { discount: true },
+    });
+    const totalDiscounts = discounts.reduce(
+      (sum, p) => sum + Number(p.discount || 0),
+      0
+    );
+
+    const advances = await prisma.employeeAdvance.findMany({
+      where: { year },
+      select: { amount: true },
+    });
+    const totalEmployeeAdvances = advances.reduce(
+      (sum, a) => sum + Number(a.amount),
+      0
+    );
+
+    const expenses = await prisma.expense.findMany({
+      where: { date: { gte: yearStart, lte: yearEnd } },
+      select: { amount: true },
+    });
+    const totalExpenses = expenses.reduce(
+      (sum, e) => sum + Number(e.amount),
+      0
+    );
+
+    const netRevenue = totalRevenue - totalDiscounts;
+    const netIncome = netRevenue - totalExpenses - totalEmployeeAdvances;
+
+    res.status(200).json({
+      year,
+      currentIncome,
+      previousIncome,
+      advanceIncome,
+      totalRevenue,
+      totalDiscounts,
+      netRevenue,
+      totalExpenses,
+      totalEmployeeAdvances,
+      netIncome,
+    });
+  } catch (error) {
+    console.error("Error generating yearly income statement:", error);
     res.status(500).json({ message: "Internal server error." });
   }
 };

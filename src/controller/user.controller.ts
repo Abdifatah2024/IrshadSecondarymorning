@@ -1150,13 +1150,63 @@ export const resetPasswordWithToken = async (req: Request, res: Response) => {
   }
 };
 
+// export const updateUserRole = async (req: Request, res: Response) => {
+//   try {
+//     // @ts-ignore — user injected by auth middleware
+//     const currentUser = req.user;
+
+//     if (!currentUser || currentUser.role !== "ADMIN") {
+//       return res.status(403).json({ message: "Only ADMIN can update roles." });
+//     }
+
+//     const userId = parseInt(req.params.id);
+//     const { role: newRole } = req.body;
+
+//     if (isNaN(userId)) {
+//       return res.status(400).json({ message: "Invalid user ID." });
+//     }
+
+//     if (!["ADMIN", "USER"].includes(newRole)) {
+//       return res
+//         .status(400)
+//         .json({ message: "Role can only be changed to ADMIN or USER." });
+//     }
+
+//     const targetUser = await prisma.user.findUnique({ where: { id: userId } });
+
+//     if (!targetUser) {
+//       return res.status(404).json({ message: "Target user not found." });
+//     }
+
+//     const updatedUser = await prisma.user.update({
+//       where: { id: userId },
+//       data: { role: newRole },
+//     });
+
+//     return res.status(200).json({
+//       message: "User role updated successfully.",
+//       user: {
+//         id: updatedUser.id,
+//         username: updatedUser.username,
+//         role: updatedUser.role,
+//       },
+//     });
+//   } catch (error) {
+//     console.error("Error updating role:", error);
+//     return res.status(500).json({ message: "Server error." });
+//   }
+// };
+
+// controllers/announcementController.ts
 export const updateUserRole = async (req: Request, res: Response) => {
   try {
     // @ts-ignore — user injected by auth middleware
     const currentUser = req.user;
 
-    if (!currentUser || currentUser.role !== "ADMIN") {
-      return res.status(403).json({ message: "Only ADMIN can update roles." });
+    if (!currentUser || !["ADMIN", "ACADEMY"].includes(currentUser.role)) {
+      return res
+        .status(403)
+        .json({ message: "Only ADMIN or ACADEMY can update roles." });
     }
 
     const userId = parseInt(req.params.id);
@@ -1166,10 +1216,20 @@ export const updateUserRole = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Invalid user ID." });
     }
 
-    if (!["ADMIN", "USER"].includes(newRole)) {
-      return res
-        .status(400)
-        .json({ message: "Role can only be changed to ADMIN or USER." });
+    const allowedRoles = [
+      "ADMIN",
+      "USER",
+      "Teacher",
+      "PARENT",
+      "PENDING",
+      "ACADEMY",
+    ];
+    if (!allowedRoles.includes(newRole)) {
+      return res.status(400).json({
+        message: `Role can only be changed to one of: ${allowedRoles.join(
+          ", "
+        )}.`,
+      });
     }
 
     const targetUser = await prisma.user.findUnique({ where: { id: userId } });
@@ -1197,7 +1257,6 @@ export const updateUserRole = async (req: Request, res: Response) => {
   }
 };
 
-// controllers/announcementController.ts
 export const createAnnouncement = async (req: Request, res: Response) => {
   const { title, message, targetRole, startDate, endDate } = req.body;
   //@ts-ignore

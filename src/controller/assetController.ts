@@ -1,10 +1,11 @@
 import { Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
+import { generateAssetNumber } from "../Utils/generateAssetNumber";
 
 const prisma = new PrismaClient();
 
 /**
- * Create Asset
+ * Create Asset with Unique Asset Number
  */
 export const createAsset = async (req: Request, res: Response) => {
   const {
@@ -28,8 +29,12 @@ export const createAsset = async (req: Request, res: Response) => {
   }
 
   try {
+    // Generate a unique asset number like ASSET-20250720-0001
+    const assetNumber = await generateAssetNumber(prisma);
+
     const asset = await prisma.asset.create({
       data: {
+        assetNumber,
         name,
         category,
         purchaseDate: parsedDate,
@@ -195,5 +200,29 @@ export const getAssetReport = async (_req: Request, res: Response) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Failed to generate asset report." });
+  }
+};
+
+/**
+ * Get Asset by Asset Number
+ */
+export const getAssetByAssetNumber = async (req: Request, res: Response) => {
+  const { assetNumber } = req.params;
+
+  try {
+    const asset = await prisma.asset.findUnique({
+      where: { assetNumber },
+    });
+
+    if (!asset) {
+      return res
+        .status(404)
+        .json({ message: "Asset not found with that number." });
+    }
+
+    res.status(200).json(asset);
+  } catch (error) {
+    console.error("Error fetching asset by number:", error);
+    res.status(500).json({ message: "Failed to fetch asset." });
   }
 };

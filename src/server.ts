@@ -12,12 +12,17 @@ import AdvanceRouter from "./routes/EmployeeAdvanceRoute";
 import expenseRoutes from "./routes/expenseRoutes";
 import FinanacialRoutes from "./routes/financialReports";
 import assetRoutes from "./routes/assetRoutes";
+import discountLimitRoutes from "./routes/discountLimit.routes";
 import cors from "cors";
 import path from "path";
 import workPlanRoutes from "./routes/workPlanRoutes";
 import smsRoutes from "./routes/sms.route";
 import paymentVoucherRouter from "./routes/paymentVoucher.routes";
 import cookieParser from "cookie-parser";
+import BusRoute from "./routes/BusRoute";
+import EmployeeAttendceRoute from "./routes/employeeAttendanceRoutes";
+import ProfitLogRoute from "./routes/ProfitRoute";
+import LedgerRoute from "./routes/profitLogRoutes";
 
 // import morgan from "morgan";
 const app = express();
@@ -55,6 +60,7 @@ app.get("/health", (req, res) => {
 app.use("/user", userRouter);
 // app.use("/Note", noteRouter);
 app.use("/student", studentRouter);
+app.use("/Bus", BusRoute);
 app.use("/exam", examtypeRouter);
 app.use("/Dicipline", Dicipline);
 app.use("/fee", FeeRouter);
@@ -65,6 +71,10 @@ app.use("/api/workplans", workPlanRoutes);
 app.use("/Api/Sms", smsRoutes);
 app.use("/Asset", assetRoutes);
 app.use("/Voucher", paymentVoucherRouter);
+app.use("/api/discount-limit", discountLimitRoutes);
+app.use("/Employee/Attendece", EmployeeAttendceRoute);
+app.use("/profif/log", ProfitLogRoute);
+app.use("/Ledger", LedgerRoute);
 app.use(
   "/uploads",
   express.static(path.join(__dirname, "../uploads"), {

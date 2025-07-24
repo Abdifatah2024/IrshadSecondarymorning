@@ -2293,7 +2293,7 @@ export { upload };
 
 export const getStudentsWithBus = async (req: Request, res: Response) => {
   try {
-    const schoolFee = 28;
+    const standardSchoolFee = 28;
 
     const students = await prisma.student.findMany({
       where: {
@@ -2319,12 +2319,16 @@ export const getStudentsWithBus = async (req: Request, res: Response) => {
 
     const enrichedStudents = students.map((student) => {
       const totalFee = Number(student.fee) || 0;
-      const busFee = totalFee > schoolFee ? totalFee - schoolFee : 0;
+
+      const dynamicSchoolFee =
+        totalFee < standardSchoolFee ? totalFee : standardSchoolFee;
+
+      const busFee = totalFee - dynamicSchoolFee;
 
       return {
         ...student,
         totalFee,
-        schoolFee,
+        schoolFee: dynamicSchoolFee,
         busFee,
       };
     });
@@ -2343,6 +2347,66 @@ export const getStudentsWithBus = async (req: Request, res: Response) => {
     console.error("Error fetching students with bus:", error);
     res.status(500).json({
       message: "Server error while fetching students with bus",
+    });
+  }
+};
+
+export const getBusStudentsWithZeroBusFee = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const standardSchoolFee = 28;
+
+    const students = await prisma.student.findMany({
+      where: {
+        isdeleted: false,
+        AND: [{ bus: { not: null } }, { bus: { not: "" } }],
+      },
+      select: {
+        id: true,
+        fullname: true,
+        fee: true,
+        phone: true, // ✅ Added this line
+        bus: true,
+        FreeReason: true,
+        classId: true,
+        classes: {
+          select: {
+            name: true,
+          },
+        },
+      },
+      orderBy: {
+        fullname: "asc",
+      },
+    });
+
+    const filteredStudents = students
+      .map((student) => {
+        const totalFee = Number(student.fee) || 0;
+        const dynamicSchoolFee =
+          totalFee < standardSchoolFee ? totalFee : standardSchoolFee;
+        const busFee = totalFee - dynamicSchoolFee;
+
+        return {
+          ...student,
+          totalFee,
+          schoolFee: dynamicSchoolFee,
+          busFee,
+        };
+      })
+      .filter((student) => student.busFee === 0); // only include students who paid no bus fee
+
+    res.status(200).json({
+      success: true,
+      count: filteredStudents.length,
+      students: filteredStudents,
+    });
+  } catch (error) {
+    console.error("Error fetching bus students with zero bus fee:", error);
+    res.status(500).json({
+      message: "Server error while fetching students",
     });
   }
 };
@@ -2915,5 +2979,282 @@ export const getClassMonthlyAttendanceSummary = async (
   } catch (error) {
     console.error("Error fetching class monthly attendance summary:", error);
     res.status(500).json({ message: "Server error" });
+  }
+};
+
+export const softDeleteStudent = async (req: Request, res: Response) => {
+  const { studentId, reason } = req.body;
+
+  // 🔐 Extract user ID from token using `useId` as defined in your JWT payload
+  //@ts-ignore
+  const user = req.user as { useId?: number };
+  const userId = user?.useId;
+
+  if (!studentId || !reason || !userId) {
+    return res.status(400).json({
+      success: false,
+      message: "studentId, reason, and valid user token are required.",
+    });
+  }
+
+  try {
+    // Step 1: Soft delete the student
+    await prisma.student.update({
+      where: { id: studentId },
+      data: { isdeleted: true },
+    });
+
+    // ✅ Step 2: Log the reason in StudentDeletionLog (use `userId`)
+    await prisma.studentDeletionLog.create({
+      data: {
+        studentId,
+        reason,
+        userId, // ✔ this is the correct field name
+      },
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Student marked as deleted and reason recorded.",
+    });
+  } catch (error) {
+    console.error("Soft delete error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error while deleting student.",
+    });
+  }
+};
+
+// controllers/student.controller.ts
+
+// export const listDeletedStudents = async (_req: Request, res: Response) => {
+//   try {
+//     const deletedStudents = await prisma.studentDeletionLog.findMany({
+//       orderBy: { deletedAt: "desc" },
+//       include: {
+//         Student: {
+//           select: {
+//             id: true,
+//             fullname: true,
+//             classes: {
+//               select: {
+//                 name: true,
+//               },
+//             },
+//           },
+//         },
+//         User: {
+//           select: {
+//             id: true,
+//             fullName: true,
+//             email: true,
+//           },
+//         },
+//       },
+//     });
+
+//     const formatted = deletedStudents.map((log) => ({
+//       studentId: log.Student.id,
+//       fullName: log.Student.fullname,
+//       className: log.Student.classes?.name || "N/A",
+//       reason: log.reason,
+//       deletedAt: log.deletedAt,
+//       deletedByUserId: log.User?.id || null,
+//       deletedByName: log.User?.fullName || "N/A",
+//       deletedByEmail: log.User?.email || "N/A",
+//     }));
+
+//     res.status(200).json({
+//       success: true,
+//       count: formatted.length,
+//       deletedStudents: formatted,
+//     });
+//   } catch (error) {
+//     console.error("Error fetching deleted students:", error);
+//     res.status(500).json({
+//       success: false,
+//       message: "Failed to retrieve deleted students.",
+//     });
+//   }
+// };
+export const listDeletedStudents = async (_req: Request, res: Response) => {
+  try {
+    const deletedStudents = await prisma.studentDeletionLog.findMany({
+      where: {
+        restoredAt: null, // ✅ Only include non-restored (still deleted)
+      },
+      orderBy: { deletedAt: "desc" },
+      include: {
+        Student: {
+          select: {
+            id: true,
+            fullname: true,
+            classes: {
+              select: {
+                name: true,
+              },
+            },
+          },
+        },
+        User: {
+          select: {
+            id: true,
+            fullName: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    const formatted = deletedStudents.map((log) => ({
+      studentId: log.Student.id,
+      fullName: log.Student.fullname,
+      className: log.Student.classes?.name || "N/A",
+      reason: log.reason,
+      deletedAt: log.deletedAt,
+      deletedByUserId: log.User?.id || null,
+      deletedByName: log.User?.fullName || "N/A",
+      deletedByEmail: log.User?.email || "N/A",
+    }));
+
+    res.status(200).json({
+      success: true,
+      count: formatted.length,
+      deletedStudents: formatted,
+    });
+  } catch (error) {
+    console.error("Error fetching deleted students:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to retrieve deleted students.",
+    });
+  }
+};
+
+export const restoreDeletedStudent = async (req: Request, res: Response) => {
+  try {
+    const { studentId } = req.body;
+
+    // 🔐 Extract user ID from token
+    //@ts-ignore
+    const user = req.user as { useId?: number };
+    const userId = user?.useId;
+
+    if (!studentId || !userId) {
+      return res.status(400).json({
+        success: false,
+        message: "Student ID and valid user token are required.",
+      });
+    }
+
+    // Step 1: Check if student exists and is currently soft-deleted
+    const existingStudent = await prisma.student.findUnique({
+      where: { id: studentId },
+    });
+
+    if (!existingStudent || !existingStudent.isdeleted) {
+      return res.status(404).json({
+        success: false,
+        message: "Student not found or already active.",
+      });
+    }
+
+    // Step 2: Restore the student
+    await prisma.student.update({
+      where: { id: studentId },
+      data: { isdeleted: false },
+    });
+
+    // Step 3: Update the log entry
+    await prisma.studentDeletionLog.updateMany({
+      where: { studentId, restoredAt: null },
+      data: {
+        restoredAt: new Date(),
+        restoredBy: userId, // 👈 record who restored
+      },
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Student restored successfully and log updated.",
+    });
+  } catch (error) {
+    console.error("Restore error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to restore student.",
+    });
+  }
+};
+
+export const listRestoredStudents = async (_req: Request, res: Response) => {
+  try {
+    const restoredLogs = await prisma.studentDeletionLog.findMany({
+      where: {
+        restoredAt: {
+          not: null,
+        },
+      },
+      orderBy: { restoredAt: "desc" },
+      include: {
+        Student: {
+          select: {
+            id: true,
+            fullname: true,
+            classes: {
+              select: {
+                name: true,
+              },
+            },
+          },
+        },
+        deletedByUser: {
+          select: {
+            id: true,
+            fullName: true,
+            email: true,
+          },
+        },
+        restoredByUser: {
+          select: {
+            id: true,
+            fullName: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    const formatted = restoredLogs.map((log) => ({
+      studentId: log.Student.id,
+      fullName: log.Student.fullname,
+      className: log.Student.classes?.name || "N/A",
+      reason: log.reason,
+      deletedAt: log.deletedAt,
+      restoredAt: log.restoredAt,
+      deletedBy: {
+        id: log.deletedByUser?.id,
+        name: log.deletedByUser?.fullName,
+        email: log.deletedByUser?.email,
+      },
+      restoredBy: {
+        id: log.restoredByUser?.id,
+        name: log.restoredByUser?.fullName,
+        email: log.restoredByUser?.email,
+      },
+    }));
+
+    res.status(200).json({
+      success: true,
+      count: formatted.length,
+      restoredStudents: formatted,
+    });
+  } catch (error) {
+    console.error("Error fetching restored students:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to retrieve restored students.",
+    });
   }
 };
