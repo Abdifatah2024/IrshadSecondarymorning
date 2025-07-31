@@ -9,7 +9,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getAllEmployeesAdnace = exports.getEmployeeSalaryAdvanceBalance = exports.deleteEmployeeAdvance = exports.updateEmployeeAdvance = exports.getMonthlyIncomeOverview = exports.getEmployeeAdvances = exports.createEmployeeAdvanceAndUpdateIncome = void 0;
+exports.payAllEmployeesRemainingSalary = exports.getEmployeeAdvancesDetail = exports.getAllEmployeesAdnace = exports.getEmployeeSalaryAdvanceBalance = exports.deleteEmployeeAdvance = exports.updateEmployeeAdvance = exports.getMonthlyIncomeOverview = exports.getEmployeeAdvances = exports.createEmployeeAdvanceAndUpdateIncome = void 0;
 const client_1 = require("@prisma/client");
 const prisma = new client_1.PrismaClient();
 // export const createEmployeeAdvanceAndUpdateIncome = async (
@@ -27,7 +27,7 @@ const prisma = new client_1.PrismaClient();
 //     await prisma.$transaction(async (tx) => {
 //       const startDate = new Date(year, month - 1, 1);
 //       const endDate = new Date(year, month, 0, 23, 59, 59, 999);
-//       // ✅ 1. Get total income from Payment.amountPaid (not from allocations)
+//       // ✅ 1. Get total income from Payment.amountPaid
 //       const payments = await tx.payment.findMany({
 //         where: {
 //           date: {
@@ -78,7 +78,42 @@ const prisma = new client_1.PrismaClient();
 //           },
 //         });
 //       }
-//       // 4. Create the advance
+//       // ✅ 4. Check employee's salary and enforce 40% limit
+//       const employee = await tx.employee.findUnique({
+//         where: { id: employeeId },
+//         select: { salary: true },
+//       });
+//       if (!employee || !employee.salary) {
+//         return res
+//           .status(404)
+//           .json({ message: "Employee not found or salary missing" });
+//       }
+//       const maxAllowedAdvance = employee.salary * 0.4;
+//       // Get total advances for this employee in the given month/year
+//       const employeeAdvances = await tx.employeeAdvance.findMany({
+//         where: {
+//           employeeId,
+//           month,
+//           year,
+//         },
+//         select: { amount: true },
+//       });
+//       const employeeTotalAdvance = employeeAdvances.reduce(
+//         (sum, adv) => sum + Number(adv.amount),
+//         0
+//       );
+//       if (employeeTotalAdvance + Number(amount) > maxAllowedAdvance) {
+//         return res.status(400).json({
+//           message: `Advance denied. Maximum allowed is 40% of salary: $${maxAllowedAdvance}. Already taken: $${employeeTotalAdvance}`,
+//           breakdown: {
+//             salary: employee.salary,
+//             maxAllowedAdvance,
+//             alreadyTaken: employeeTotalAdvance,
+//             requested: amount,
+//           },
+//         });
+//       }
+//       // ✅ 5. Create the advance
 //       const advance = await tx.employeeAdvance.create({
 //         data: {
 //           employeeId,
@@ -109,58 +144,26 @@ const prisma = new client_1.PrismaClient();
 //     res.status(500).json({ message: "Internal server error" });
 //   }
 // };
-// GET /api/employee-advances?employeeId=2&month=5&year=2025
-// export const getEmployeeAdvances = async (req: Request, res: Response) => {
-//   try {
-//     const employeeId = req.query.employeeId
-//       ? Number(req.query.employeeId)
-//       : undefined;
-//     const month = req.query.month ? Number(req.query.month) : undefined;
-//     const year = req.query.year ? Number(req.query.year) : undefined;
-//     const where: any = {};
-//     if (employeeId) where.employeeId = employeeId;
-//     if (month) where.month = month;
-//     if (year) where.year = year;
-//     const advances = await prisma.employeeAdvance.findMany({
-//       where,
-//       orderBy: { dateIssued: "desc" },
-//       include: {
-//         employee: {
-//           select: { fullName: true, phone: true },
-//         },
-//         createdBy: {
-//           select: { fullName: true },
-//         },
-//       },
-//     });
-//     const totalAdvance = advances.reduce((sum, a) => sum + a.amount, 0);
-//     const summary =
-//       advances.length > 0
-//         ? {
-//             employeeName: advances[0].employee.fullName,
-//             totalAdvance,
-//             numberOfAdvances: advances.length,
-//           }
-//         : null;
-//     res.status(200).json({
-//       count: advances.length,
-//       filters: { employeeId, month, year },
-//       summary,
-//       advances,
-//     });
-//   } catch (error) {
-//     console.error("Error fetching employee advances:", error);
-//     res.status(500).json({ message: "Internal server error" });
-//   }
-// };
 const createEmployeeAdvanceAndUpdateIncome = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { amount, reason, month, year } = req.body;
         const employeeId = Number(req.params.id);
-        //@ts-ignore
+        // @ts-ignore
         const user = req.user;
         if (!employeeId || !amount || !month || !year) {
             return res.status(400).json({ message: "Missing required fields" });
+        }
+        // ✅ NEW: Only allow current month and year
+        const now = new Date();
+        const currentMonth = now.getMonth() + 1;
+        const currentYear = now.getFullYear();
+        if (Number(month) !== currentMonth || Number(year) !== currentYear) {
+            return res.status(400).json({
+                message: "You can only record advances for the current month and year.",
+                currentMonth,
+                currentYear,
+                attempted: { month, year },
+            });
         }
         yield prisma.$transaction((tx) => __awaiter(void 0, void 0, void 0, function* () {
             const startDate = new Date(year, month - 1, 1);
@@ -248,6 +251,19 @@ const createEmployeeAdvanceAndUpdateIncome = (req, res) => __awaiter(void 0, voi
                     month,
                     year,
                     createdById: user.useId,
+                },
+                include: {
+                    employee: {
+                        select: {
+                            fullName: true,
+                            phone: true,
+                        },
+                    },
+                    createdBy: {
+                        select: {
+                            fullName: true,
+                        },
+                    },
                 },
             });
             const updatedTotalAdvance = totalAdvance + Number(amount);
@@ -596,3 +612,141 @@ const getAllEmployeesAdnace = (req, res) => __awaiter(void 0, void 0, void 0, fu
     }
 });
 exports.getAllEmployeesAdnace = getAllEmployeesAdnace;
+const getEmployeeAdvancesDetail = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
+    try {
+        const employeeId = req.query.employeeId
+            ? Number(req.query.employeeId)
+            : undefined;
+        const employeeName = (_a = req.query.employeeName) === null || _a === void 0 ? void 0 : _a.toString().toLowerCase();
+        const month = req.query.month ? Number(req.query.month) : undefined;
+        const year = req.query.year ? Number(req.query.year) : undefined;
+        const where = {};
+        if (employeeId) {
+            where.employeeId = employeeId;
+        }
+        if (month)
+            where.month = month;
+        if (year)
+            where.year = year;
+        // If name is given (and no ID), search by name
+        if (!employeeId && employeeName) {
+            where.employee = {
+                fullName: {
+                    contains: employeeName,
+                    mode: "insensitive",
+                },
+            };
+        }
+        const advances = yield prisma.employeeAdvance.findMany({
+            where,
+            orderBy: { dateIssued: "desc" },
+            include: {
+                employee: {
+                    select: { fullName: true, phone: true },
+                },
+                createdBy: {
+                    select: { fullName: true },
+                },
+            },
+        });
+        const totalAdvance = advances.reduce((sum, a) => sum + a.amount, 0);
+        const summary1 = {
+            totalAdvance,
+            advancesBy: advances.length > 0 ? advances[0].createdBy.fullName : null,
+            employee: advances.length > 0
+                ? {
+                    name: advances[0].employee.fullName,
+                    phone: advances[0].employee.phone,
+                }
+                : null,
+        };
+        res.status(200).json({
+            count: advances.length,
+            filters: { employeeId, employeeName, month, year },
+            summary1,
+            advances,
+        });
+    }
+    catch (error) {
+        console.error("Error fetching employee advances:", error);
+        res.status(500).json({ message: "Internal server error" });
+    }
+});
+exports.getEmployeeAdvancesDetail = getEmployeeAdvancesDetail;
+const payAllEmployeesRemainingSalary = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { month, year } = req.body;
+        // @ts-ignore
+        const user = req.user;
+        if (!month || !year) {
+            return res.status(400).json({ message: "Month and year are required" });
+        }
+        const now = new Date();
+        const currentMonth = now.getMonth() + 1;
+        const currentYear = now.getFullYear();
+        if (month !== currentMonth || year !== currentYear) {
+            return res.status(400).json({
+                message: "You can only pay salaries for the current month and year.",
+                currentMonth,
+                currentYear,
+                attempted: { month, year },
+            });
+        }
+        const employees = yield prisma.employee.findMany({
+            select: { id: true, fullName: true, salary: true, phone: true },
+        });
+        const results = [];
+        yield prisma.$transaction((tx) => __awaiter(void 0, void 0, void 0, function* () {
+            for (const emp of employees) {
+                const advances = yield tx.employeeAdvance.findMany({
+                    where: { employeeId: emp.id, month, year },
+                    select: { amount: true },
+                });
+                const totalAdvance = advances.reduce((sum, adv) => sum + Number(adv.amount), 0);
+                const remainingSalary = emp.salary - totalAdvance;
+                if (remainingSalary <= 0) {
+                    results.push({
+                        employeeId: emp.id,
+                        name: emp.fullName,
+                        message: "Salary already paid or fully covered by advances",
+                        salary: emp.salary,
+                        totalAdvance,
+                        remainingSalary: 0,
+                    });
+                    continue;
+                }
+                const payment = yield tx.employeeAdvance.create({
+                    data: {
+                        employeeId: emp.id,
+                        amount: remainingSalary,
+                        reason: "Salary",
+                        month,
+                        year,
+                        createdById: user.useId,
+                    },
+                });
+                results.push({
+                    employeeId: emp.id,
+                    name: emp.fullName,
+                    salary: emp.salary,
+                    totalAdvance,
+                    remainingSalary,
+                    message: "Salary paid",
+                    recordId: payment.id,
+                });
+            }
+        }));
+        return res.status(200).json({
+            message: "Salary processing completed",
+            month,
+            year,
+            results,
+        });
+    }
+    catch (error) {
+        console.error("Error paying all salaries:", error);
+        return res.status(500).json({ message: "Internal server error" });
+    }
+});
+exports.payAllEmployeesRemainingSalary = payAllEmployeesRemainingSalary;

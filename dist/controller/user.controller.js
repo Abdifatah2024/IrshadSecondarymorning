@@ -23,7 +23,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.resetPasswordWithToken = exports.requestPasswordReset = exports.getMyStudents = exports.listParentUsers = exports.deleteEmployee = exports.updateEmployee = exports.getEmployeeById = exports.getAllEmployees = exports.createEmployee = exports.uploadPhoto = exports.uploadUserPhoto = exports.upload = exports.getUserProfile = exports.getUser = exports.whoami = exports.deleteUser = exports.updateUser = exports.users = exports.userinfo = exports.changePassword = exports.login = exports.register = void 0;
+exports.refreshAccessToken = exports.deleteAnnouncement = exports.updateAnnouncement = exports.getAllAnnouncementsForAdmin = exports.getAnnouncements = exports.createAnnouncement = exports.updateUserRole = exports.resetPasswordWithToken = exports.requestPasswordReset = exports.getMyStudents = exports.listParentUsers = exports.deleteEmployee = exports.updateEmployee = exports.getEmployeeById = exports.getAllEmployees = exports.createEmployee = exports.deleteUserDocument = exports.uploadPhoto = exports.uploadUserPhoto = exports.getAllDocuments = exports.uploadPdfFile = exports.uploadPdf = exports.uploadImage = exports.getUserProfile = exports.getUser = exports.whoami = exports.generateRefreshToken = exports.deleteUser = exports.updateUser = exports.GetTeachers = exports.users = exports.userinfo = exports.changePassword = exports.login = exports.register = void 0;
 // ─────────────────────────────────────────────────────
 // Imports
 // ─────────────────────────────────────────────────────
@@ -224,6 +224,50 @@ const login = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     }
 });
 exports.login = login;
+// export const login = async (req: Request, res: Response) => {
+//   try {
+//     const { password, email } = req.body;
+//     if (!password || !email) {
+//       return res
+//         .status(400)
+//         .json({ message: "Email and password are required." });
+//     }
+//     const user = await prisma.user.findFirst({
+//       where: { email: email.toLowerCase() },
+//     });
+//     if (!user) {
+//       return res.status(401).json({ message: "Incorrect email or password." });
+//     }
+//     const isPasswordValid = bcryptjs.compareSync(password, user.password);
+//     if (!isPasswordValid) {
+//       return res.status(401).json({ message: "Incorrect password." });
+//     }
+//     // ✅ Generate tokens
+//     const accessToken = genarateToken(user);
+//     const refreshToken = generateRefreshToken(user);
+//     // ✅ Set refresh token in cookie
+//     res.cookie("refreshToken", refreshToken, {
+//       httpOnly: true,
+//       secure: process.env.NODE_ENV === "production",
+//       sameSite: "strict",
+//       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+//     });
+//     return res.status(200).json({
+//       message: "Successfully logged in!",
+//       user: {
+//         id: user.id,
+//         email: user.email,
+//         username: user.username,
+//         fullname: user.fullName,
+//         Role: user.role,
+//       },
+//       Access_Token: accessToken,
+//     });
+//   } catch (error) {
+//     console.error("Login error:", error);
+//     return res.status(500).json({ message: "Login failed. Please try again." });
+//   }
+// };
 // ─────────────────────────────────────────────────────
 // Change Password
 // ─────────────────────────────────────────────────────
@@ -292,6 +336,21 @@ const users = (_req, res) => __awaiter(void 0, void 0, void 0, function* () {
     }
 });
 exports.users = users;
+const GetTeachers = (_req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const list = yield prisma.user.findMany({
+            where: {
+                role: "Teacher",
+            },
+        });
+        res.json(list);
+    }
+    catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "Error fetching users" });
+    }
+});
+exports.GetTeachers = GetTeachers;
 // ─────────────────────────────────────────────────────
 // Update User
 // ─────────────────────────────────────────────────────
@@ -352,6 +411,16 @@ const genarateToken = (user) => {
         expiresIn: "1d",
     });
 };
+const generateRefreshToken = (user) => {
+    const payload = {
+        userId: user.id,
+    };
+    return jsonwebtoken_1.default.sign(payload, process.env.JWT_REFRESH_SECRET_KEY, {
+        issuer: "Api.Irshaad.com",
+        expiresIn: "7d", // 7 days
+    });
+};
+exports.generateRefreshToken = generateRefreshToken;
 // ─────────────────────────────────────────────────────
 // Who Am I
 // ─────────────────────────────────────────────────────
@@ -411,25 +480,121 @@ exports.getUserProfile = getUserProfile;
 // ─────────────────────────────────────────────────────
 // Upload Config
 // ─────────────────────────────────────────────────────
+// const storage = multer.diskStorage({
+//   destination: "uploads/",
+//   filename: (req, file, cb) => {
+//     const uniqueSuffix = uuidv4();
+//     const ext = path.extname(file.originalname);
+//     cb(null, `user-${uniqueSuffix}${ext}`);
+//   },
+// });
+// const fileFilter = (req: any, file: any, cb: any) => {
+//   if (file.mimetype.startsWith("image")) cb(null, true);
+//   else cb(new Error("Only image files are allowed!"), false);
+// };
+// export const upload = multer({
+//   storage,
+//   limits: { fileSize: 5 * 1024 * 1024 },
+//   fileFilter,
+// });
 const storage = multer_1.default.diskStorage({
-    destination: "uploads/",
-    filename: (req, file, cb) => {
+    destination: function (_req, _file, cb) {
+        cb(null, "uploads/");
+    },
+    filename: function (_req, file, cb) {
         const uniqueSuffix = (0, uuid_1.v4)();
         const ext = path_1.default.extname(file.originalname);
-        cb(null, `user-${uniqueSuffix}${ext}`);
+        cb(null, `${file.fieldname}-${uniqueSuffix}${ext}`);
     },
 });
-const fileFilter = (req, file, cb) => {
-    if (file.mimetype.startsWith("image"))
+// ─────────────────────────────────────────────────────
+// Image File Filter
+// ─────────────────────────────────────────────────────
+const imageFileFilter = (req, file, cb) => {
+    if (file.mimetype.startsWith("image/")) {
         cb(null, true);
-    else
-        cb(new Error("Only image files are allowed!"), false);
+    }
+    else {
+        cb(new Error("Only image files are allowed!"));
+    }
 };
-exports.upload = (0, multer_1.default)({
+// ─────────────────────────────────────────────────────
+// PDF File Filter
+// ─────────────────────────────────────────────────────
+const pdfFileFilter = (req, file, cb) => {
+    if (file.mimetype === "application/pdf") {
+        cb(null, true);
+    }
+    else {
+        cb(new Error("Only PDF files are allowed!"));
+    }
+};
+// ─────────────────────────────────────────────────────
+// Multer Uploads
+// ─────────────────────────────────────────────────────
+exports.uploadImage = (0, multer_1.default)({
     storage,
-    limits: { fileSize: 5 * 1024 * 1024 },
-    fileFilter,
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max for images
+    fileFilter: imageFileFilter,
 });
+exports.uploadPdf = (0, multer_1.default)({
+    storage,
+    limits: { fileSize: 10 * 1024 * 1024 }, // 10MB max for PDFs
+    fileFilter: pdfFileFilter,
+});
+//pdf file
+const uploadPdfFile = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
+    try {
+        const file = req.file;
+        if (!file) {
+            return res.status(400).json({ message: "No file uploaded" });
+        }
+        const title = req.body.title || file.originalname;
+        const fileUrl = `${req.protocol}://${req.get("host")}/uploads/${file.filename}`;
+        // If you’re using auth middleware
+        // @ts-ignore
+        const userId = ((_a = req.user) === null || _a === void 0 ? void 0 : _a.useId) || 1; // fallback for testing/dev
+        const savedDocument = yield prisma.document.create({
+            data: {
+                title,
+                fileName: file.originalname,
+                fileUrl,
+                uploadedById: userId,
+            },
+        });
+        return res.status(201).json({
+            message: "PDF uploaded and saved",
+            document: savedDocument,
+        });
+    }
+    catch (error) {
+        console.error("PDF upload error:", error);
+        return res.status(500).json({ message: "Failed to upload PDF" });
+    }
+});
+exports.uploadPdfFile = uploadPdfFile;
+const getAllDocuments = (_req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const docs = yield prisma.document.findMany({
+            include: {
+                uploadedBy: {
+                    select: {
+                        id: true,
+                        username: true,
+                    },
+                },
+            },
+            orderBy: { uploadedAt: "desc" },
+        });
+        res.status(200).json({ documents: docs });
+    }
+    catch (error) {
+        console.error("List documents error:", error);
+        res.status(500).json({ message: "Failed to fetch documents" });
+    }
+});
+exports.getAllDocuments = getAllDocuments;
 // ─────────────────────────────────────────────────────
 // Upload User Photo (Authenticated User)
 // ─────────────────────────────────────────────────────
@@ -487,6 +652,41 @@ const uploadPhoto = (req, res) => __awaiter(void 0, void 0, void 0, function* ()
     }
 });
 exports.uploadPhoto = uploadPhoto;
+const deleteUserDocument = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        // @ts-ignore
+        const user = req.user;
+        const userId = user === null || user === void 0 ? void 0 : user.useId;
+        const docId = parseInt(req.params.id);
+        if (!userId) {
+            return res.status(401).json({ message: "Authentication required" });
+        }
+        if (isNaN(docId)) {
+            return res.status(400).json({ message: "Invalid document ID" });
+        }
+        // Verify the document belongs to the authenticated user
+        const document = yield prisma.document.findUnique({
+            where: { id: docId },
+        });
+        if (!document || document.uploadedById !== userId) {
+            return res
+                .status(404)
+                .json({ message: "Document not found or unauthorized" });
+        }
+        // Delete from database
+        yield prisma.document.delete({ where: { id: docId } });
+        res
+            .status(200)
+            .json({ status: "success", message: "Document deleted successfully" });
+    }
+    catch (error) {
+        console.error("Delete error:", error);
+        res
+            .status(500)
+            .json({ status: "error", message: "Failed to delete document" });
+    }
+});
+exports.deleteUserDocument = deleteUserDocument;
 // create Employee
 const createEmployee = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
@@ -732,54 +932,6 @@ exports.getMyStudents = getMyStudents;
 //
 // controllers/authController.ts
 const crypto_1 = __importDefault(require("crypto"));
-// export const requestPasswordReset = async (req: Request, res: Response) => {
-//   try {
-//     const { email } = req.body;
-//     const user = await prisma.user.findUnique({
-//       where: { email: email.toLowerCase() },
-//     });
-//     if (!user)
-//       return res
-//         .status(404)
-//         .json({ message: "No user found with that email." });
-//     // Limit: 3 times per hour
-//     const now = new Date();
-//     const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
-//     if (user.lastResetRequestAt && user.lastResetRequestAt > oneHourAgo) {
-//       if (user.resetRequestCount >= 3) {
-//         return res.status(429).json({
-//           message: "Too many reset requests. Try again in 1 hour.",
-//         });
-//       }
-//     } else {
-//       // Reset count if it's been more than an hour
-//       await prisma.user.update({
-//         where: { id: user.id },
-//         data: {
-//           resetRequestCount: 0,
-//         },
-//       });
-//     }
-//     const token = crypto.randomBytes(32).toString("hex");
-//     const tokenExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 min
-//     await prisma.user.update({
-//       where: { id: user.id },
-//       data: {
-//         resetToken: token,
-//         resetTokenExpires: tokenExpires,
-//         resetRequestCount: { increment: 1 },
-//         lastResetRequestAt: now,
-//       },
-//     });
-//     return res.status(200).json({
-//       message: "Reset token sent.",
-//       resetToken: token, // for testing only
-//     });
-//   } catch (error) {
-//     console.error("Reset token error:", error);
-//     res.status(500).json({ message: "Server error" });
-//   }
-// };
 const requestPasswordReset = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const { email } = req.body;
@@ -857,3 +1009,252 @@ const resetPasswordWithToken = (req, res) => __awaiter(void 0, void 0, void 0, f
     }
 });
 exports.resetPasswordWithToken = resetPasswordWithToken;
+// export const updateUserRole = async (req: Request, res: Response) => {
+//   try {
+//     // @ts-ignore — user injected by auth middleware
+//     const currentUser = req.user;
+//     if (!currentUser || currentUser.role !== "ADMIN") {
+//       return res.status(403).json({ message: "Only ADMIN can update roles." });
+//     }
+//     const userId = parseInt(req.params.id);
+//     const { role: newRole } = req.body;
+//     if (isNaN(userId)) {
+//       return res.status(400).json({ message: "Invalid user ID." });
+//     }
+//     if (!["ADMIN", "USER"].includes(newRole)) {
+//       return res
+//         .status(400)
+//         .json({ message: "Role can only be changed to ADMIN or USER." });
+//     }
+//     const targetUser = await prisma.user.findUnique({ where: { id: userId } });
+//     if (!targetUser) {
+//       return res.status(404).json({ message: "Target user not found." });
+//     }
+//     const updatedUser = await prisma.user.update({
+//       where: { id: userId },
+//       data: { role: newRole },
+//     });
+//     return res.status(200).json({
+//       message: "User role updated successfully.",
+//       user: {
+//         id: updatedUser.id,
+//         username: updatedUser.username,
+//         role: updatedUser.role,
+//       },
+//     });
+//   } catch (error) {
+//     console.error("Error updating role:", error);
+//     return res.status(500).json({ message: "Server error." });
+//   }
+// };
+// controllers/announcementController.ts
+const updateUserRole = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        // @ts-ignore — user injected by auth middleware
+        const currentUser = req.user;
+        if (!currentUser || !["ADMIN", "ACADEMY"].includes(currentUser.role)) {
+            return res
+                .status(403)
+                .json({ message: "Only ADMIN or ACADEMY can update roles." });
+        }
+        const userId = parseInt(req.params.id);
+        const { role: newRole } = req.body;
+        if (isNaN(userId)) {
+            return res.status(400).json({ message: "Invalid user ID." });
+        }
+        const allowedRoles = [
+            "ADMIN",
+            "USER",
+            "Teacher",
+            "PARENT",
+            "PENDING",
+            "ACADEMY",
+        ];
+        if (!allowedRoles.includes(newRole)) {
+            return res.status(400).json({
+                message: `Role can only be changed to one of: ${allowedRoles.join(", ")}.`,
+            });
+        }
+        const targetUser = yield prisma.user.findUnique({ where: { id: userId } });
+        if (!targetUser) {
+            return res.status(404).json({ message: "Target user not found." });
+        }
+        const updatedUser = yield prisma.user.update({
+            where: { id: userId },
+            data: { role: newRole },
+        });
+        return res.status(200).json({
+            message: "User role updated successfully.",
+            user: {
+                id: updatedUser.id,
+                username: updatedUser.username,
+                role: updatedUser.role,
+            },
+        });
+    }
+    catch (error) {
+        console.error("Error updating role:", error);
+        return res.status(500).json({ message: "Server error." });
+    }
+});
+exports.updateUserRole = updateUserRole;
+const createAnnouncement = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const { title, message, targetRole, startDate, endDate } = req.body;
+    //@ts-ignore
+    const userId = req.user.useId;
+    try {
+        const announcement = yield prisma.announcement.create({
+            data: {
+                title,
+                message,
+                targetRole,
+                startDate: new Date(startDate),
+                endDate: new Date(endDate),
+                createdById: userId,
+            },
+        });
+        res.status(201).json(announcement);
+    }
+    catch (err) {
+        console.error(err);
+        res.status(500).json({ message: "Failed to create announcement." });
+    }
+});
+exports.createAnnouncement = createAnnouncement;
+const getAnnouncements = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    //@ts-ignore
+    const userRole = req.user.role;
+    const now = new Date();
+    try {
+        const announcements = yield prisma.announcement.findMany({
+            where: {
+                targetRole: userRole,
+                startDate: { lte: now },
+                endDate: { gte: now },
+            },
+            orderBy: { createdAt: "desc" },
+        });
+        // Calculate time left for each announcement
+        const enhancedAnnouncements = announcements.map((a) => {
+            const timeDiff = new Date(a.endDate).getTime() - now.getTime();
+            const daysLeft = Math.floor(timeDiff / (1000 * 60 * 60 * 24));
+            const hoursLeft = Math.floor((timeDiff / (1000 * 60 * 60)) % 24);
+            const minutesLeft = Math.floor((timeDiff / (1000 * 60)) % 60);
+            return Object.assign(Object.assign({}, a), { timeRemaining: `${daysLeft}d ${hoursLeft}h ${minutesLeft}m`, daysLeft,
+                hoursLeft,
+                minutesLeft });
+        });
+        res.status(200).json(enhancedAnnouncements);
+    }
+    catch (err) {
+        console.error(err);
+        res.status(500).json({ message: "Failed to fetch announcements." });
+    }
+});
+exports.getAnnouncements = getAnnouncements;
+const getAllAnnouncementsForAdmin = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    //@ts-ignore
+    const userRole = req.user.role;
+    const now = new Date();
+    try {
+        const announcements = yield prisma.announcement.findMany({
+            orderBy: { createdAt: "desc" },
+            include: {
+                createdBy: {
+                    select: {
+                        id: true,
+                        fullName: true,
+                        email: true,
+                        role: true,
+                    },
+                },
+            },
+        });
+        // Enhance with time remaining info
+        const enhancedAnnouncements = announcements.map((a) => {
+            const timeDiff = new Date(a.endDate).getTime() - now.getTime();
+            const daysLeft = Math.floor(timeDiff / (1000 * 60 * 60 * 24));
+            const hoursLeft = Math.floor((timeDiff / (1000 * 60 * 60)) % 24);
+            const minutesLeft = Math.floor((timeDiff / (1000 * 60)) % 60);
+            return Object.assign(Object.assign({}, a), { timeRemaining: timeDiff > 0
+                    ? `${daysLeft}d ${hoursLeft}h ${minutesLeft}m`
+                    : "Expired", daysLeft: timeDiff > 0 ? daysLeft : 0, hoursLeft: timeDiff > 0 ? hoursLeft : 0, minutesLeft: timeDiff > 0 ? minutesLeft : 0, isExpired: timeDiff <= 0 });
+        });
+        res.status(200).json(enhancedAnnouncements);
+    }
+    catch (err) {
+        console.error(err);
+        res.status(500).json({ message: "Failed to fetch all announcements." });
+    }
+});
+exports.getAllAnnouncementsForAdmin = getAllAnnouncementsForAdmin;
+// Update (edit) announcement
+const updateAnnouncement = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const id = Number(req.params.id);
+    const { title, message, targetRole, startDate, endDate } = req.body;
+    try {
+        const updated = yield prisma.announcement.update({
+            where: { id },
+            data: {
+                title,
+                message,
+                targetRole,
+                startDate: new Date(startDate),
+                endDate: new Date(endDate),
+            },
+        });
+        res.json(updated);
+    }
+    catch (err) {
+        console.error(err);
+        res.status(500).json({ message: "Failed to update announcement." });
+    }
+});
+exports.updateAnnouncement = updateAnnouncement;
+// Delete announcement
+const deleteAnnouncement = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const id = Number(req.params.id);
+    try {
+        yield prisma.announcement.delete({ where: { id } });
+        res.status(204).end();
+    }
+    catch (err) {
+        console.error(err);
+        res.status(500).json({ message: "Failed to delete announcement." });
+    }
+});
+exports.deleteAnnouncement = deleteAnnouncement;
+//Generate Token and Referesh Token?
+const refreshAccessToken = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const refreshToken = req.cookies.refreshToken;
+        if (!refreshToken) {
+            return res.status(401).json({ message: "Refresh token missing." });
+        }
+        const decoded = jsonwebtoken_1.default.verify(refreshToken, process.env.JWT_REFRESH_SECRET_KEY);
+        const user = yield prisma.user.findUnique({ where: { id: decoded.useId } });
+        if (!user) {
+            return res.status(403).json({ message: "User not found." });
+        }
+        const accessPayload = {
+            useId: user.id,
+            userName: user.username,
+            joined_at: user.createdAt,
+            role: user.role,
+        };
+        const newAccessToken = jsonwebtoken_1.default.sign(accessPayload, process.env.JWT_SECRET_KEY, {
+            issuer: "Api.Irshaad.com",
+            expiresIn: "5m", // or 15m
+        });
+        return res.status(200).json({
+            Access_token: newAccessToken, // ✅ exact format you asked for
+        });
+    }
+    catch (error) {
+        console.error("Refresh error:", error);
+        return res
+            .status(403)
+            .json({ message: "Invalid or expired refresh token." });
+    }
+});
+exports.refreshAccessToken = refreshAccessToken;

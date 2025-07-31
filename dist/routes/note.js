@@ -1,19 +1,27 @@
 "use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-const express_1 = require("express");
-const authaniticator_1 = require("../middlewares/authaniticator");
-const note_controller_1 = require("../controller/note.controller");
-const Task_controller_1 = require("../controller/Task.controller");
-// import { authenticate } from ";
-const router = (0, express_1.Router)();
-router.post("/create", authaniticator_1.authenticate, note_controller_1.note);
-router.post("/createtask", authaniticator_1.authenticate, Task_controller_1.taskNote);
-// router.post("/note", note);
-// router.get("/:id", authenticate, lists);
-router.get("/List", note_controller_1.lists);
-router.get("/TaskList", note_controller_1.listsTask);
-// router.get("/Gets", getUserData);
-router.get("/noteID/:noteID", authaniticator_1.authenticate, note_controller_1.UpdateNote);
-router.put("/:id", authaniticator_1.authenticate, Task_controller_1.updateTask);
-router.delete("/:id", authaniticator_1.authenticate, Task_controller_1.deleteTask);
-exports.default = router;
+// import { Router } from "express";
+// import { authenticate } from "../middlewares/authaniticator";
+// import {
+//   note,
+//   lists,
+//   UpdateNote,
+//   listsTask,
+// } from "../controller/note.controller";
+// import {
+//   deleteTask,
+//   taskNote,
+//   updateTask,
+// } from "../controller/Task.controller";
+// // import { authenticate } from ";
+// const router = Router();
+// router.post("/create", authenticate, note);
+// router.post("/createtask", authenticate, taskNote);
+// // router.post("/note", note);
+// // router.get("/:id", authenticate, lists);
+// router.get("/List", lists);
+// router.get("/TaskList", listsTask);
+// // router.get("/Gets", getUserData);
+// router.get("/noteID/:noteID", authenticate, UpdateNote);
+// router.put("/:id", authenticate, updateTask);
+// router.delete("/:id", authenticate, deleteTask);
+// export default router;

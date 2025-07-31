@@ -9,6 +9,7 @@ const authaniticator_1 = require("../middlewares/authaniticator");
 const router = express_1.default.Router();
 // Generate monthly fees for all studentss
 router.get("/students/balance-summaries", PaymentContorller_1.getAllStudentAccountSummaries);
+router.get("/students/search", PaymentContorller_1.searchStudentsByNameOrId);
 router.post("/generate-monthly-fees", PaymentContorller_1.generateMonthlyFees);
 router.get("/StudentWithBalance", PaymentContorller_1.getStudentsWithUnpaidFeesOrBalance);
 // Get all fees for a student (by ID)
@@ -33,4 +34,13 @@ router.get("/students/:id/deposit-status", PaymentContorller_1.getStudentDeposit
 router.get("/payments/combined", PaymentContorller_1.getCombinedPayments);
 router.get("/income/today", PaymentContorller_1.getTodayIncome);
 router.get("/Classfee/status", PaymentContorller_1.getStudentsWithUnpaidFeeMonthly);
+router.get("/family/balance", PaymentContorller_1.getFamilyBalanceByPhone);
+router.post("/pay/month", authaniticator_1.authenticate, PaymentContorller_1.payStudentMonth);
+router.post("/pay-full-month", authaniticator_1.authenticate, PaymentContorller_1.payFullForMonthByPhone);
+router.post("/check-payment-number", PaymentContorller_1.checkIfPaymentNumberAlreadyUsed);
+router.post("/payment/check-last-used-number", PaymentContorller_1.checkLastPaymentByNumber);
+router.post("/payment/student", authaniticator_1.authenticate, PaymentContorller_1.payFullForMonthByStudent);
+router.get("/payments/collection-summary", PaymentContorller_1.getUserPaymentCollections);
+router.post("/payments/by-student", PaymentContorller_1.getAllPaymentsByStudentId);
+router.get("/GetStudent/Balance/Month", PaymentContorller_1.getStudentsWithBalancesAndDueMonths);
 exports.default = router;

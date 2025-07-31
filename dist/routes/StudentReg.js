@@ -8,9 +8,12 @@ const autharize_1 = require("../middlewares/autharize");
 const StudentsRegister_1 = require("../controller/StudentsRegister");
 const router = (0, express_1.Router)();
 /* ----------------------------- Student CRUD ----------------------------- */
+router.put("/restore", authaniticator_1.authenticate, StudentsRegister_1.restoreDeletedStudent);
+router.get("/students/restored", authaniticator_1.authenticate, StudentsRegister_1.listRestoredStudents);
 router.post("/create", authaniticator_1.authenticate, StudentsRegister_1.createStudent);
 router.post("/createMultiple", authaniticator_1.authenticate, StudentsRegister_1.createMultipleStudents);
 router.post("/upload-excel", StudentsRegister_1.upload.single("file"), authaniticator_1.authenticate, StudentsRegister_1.createMultipleStudentsByExcel);
+router.put("/call-info", StudentsRegister_1.updateAttendanceCallInfoHandler);
 router.put("/updateClass", authaniticator_1.authenticate, StudentsRegister_1.updateStudentClass);
 router.put("/updateClass", authaniticator_1.authenticate, StudentsRegister_1.updateStudentClass);
 router.put("/:id", authaniticator_1.authenticate, StudentsRegister_1.updateStudent);
@@ -63,4 +66,15 @@ router.get("/family/by-name", StudentsRegister_1.getStudentsByFamilyNameWritten)
 router.put("/student/update-parent", StudentsRegister_1.updateStudentParent);
 router.get("/students/same-bus/:bus", StudentsRegister_1.getStudentsWithSameBus);
 router.get("/students/by-parent-phone", StudentsRegister_1.getLastStudentByParentPhone);
+router.get("/students/with-bus", StudentsRegister_1.getStudentsWithBus);
+router.get("/students/with-bus/Zero", StudentsRegister_1.getBusStudentsWithZeroBusFee);
+router.post("/soft-delete", authaniticator_1.authenticate, StudentsRegister_1.softDeleteStudent);
+router.get("/students/without-bus", StudentsRegister_1.getStudentsWithoutBus);
+router.put("/students/update-transfer-roll", StudentsRegister_1.updateStudentTransferAndRollNumber);
+router.get("/students/untransferred", StudentsRegister_1.listUntransferredStudents);
+router.get("/attendance/report", StudentsRegister_1.absentReport);
+router.get("/reports/class-attendance-summary", StudentsRegister_1.getClassAttendanceSummary);
+router.get("/reports/daily-attendance-overview", StudentsRegister_1.getDailyAttendanceOverview);
+router.get("/class-monthly-attendance-summary/:classId", StudentsRegister_1.getClassMonthlyAttendanceSummary);
+router.get("/Soft/deleted", authaniticator_1.authenticate, StudentsRegister_1.listDeletedStudents);
 exports.default = router;

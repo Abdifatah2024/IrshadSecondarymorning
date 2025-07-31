@@ -12,4 +12,7 @@ router.get("/cash-flow", financialReportsController_1.getCashFlowStatement); // 
 router.get("/unpaid-summary", financialReportsController_1.getStudentsWithUnpaidFeesOrBalance); // /api/financial/unpaid-summary
 router.get("/monthly-summary", financialReportsController_1.getCombinedPayments); // /api/financial/monthly-summary
 router.get("/today-income", financialReportsController_1.getTodayIncome); // /api/financial/today-income
+router.get("/IncomeStatement/wholeyear", financialReportsController_1.getYearlyIncomeStatement);
+// routes/financeRoutes.ts
+router.get("/income-statement-quarter", financialReportsController_1.getQuarterlyIncomeStatement);
 exports.default = router;

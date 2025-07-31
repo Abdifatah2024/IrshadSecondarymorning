@@ -40,4 +40,5 @@ router.put("/admin/user/set-correction-limit", authaniticator_1.authenticate, te
 router.get("/admin/teacher/:userId/correction-limit", authaniticator_1.authenticate, teacherScore_controller_1.getTeacherCorrectionById);
 router.get("/me/correction-limit", authaniticator_1.authenticate, teacherScore_controller_1.getMyCorrectionLimit);
 router.get("/dashboard-data", authaniticator_1.authenticate, teacherScore_controller_1.getTeacherDashboardData);
+router.get("/summary/parent", authaniticator_1.authenticate, exam_controller_1.getParentStudentExamSummary);
 exports.default = router;

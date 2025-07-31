@@ -13,9 +13,10 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getTeacherDashboardData = exports.getTeacherCorrectionById = exports.getMyCorrectionLimit = exports.setCorrectionLimit = exports.updateStudentScore = exports.deleteTeacherAssignment = exports.updateTeacherAssignment = exports.assignTeacherToClassSubject = exports.getTeacherAssignmentsById = exports.TeacherEnterScore = exports.registerTeacher = void 0;
-const client_1 = require("@prisma/client");
+const client_1 = require("@prisma/client"); // ✅ for Prisma.PrismaClientKnownRequestError
+const client_2 = require("@prisma/client");
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
-const prisma = new client_1.PrismaClient();
+const prisma = new client_2.PrismaClient();
 const SALT_ROUNDS = 10;
 // ✅ Register a teacher
 const registerTeacher = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
@@ -57,7 +58,7 @@ const registerTeacher = (req, res) => __awaiter(void 0, void 0, void 0, function
                 createdAt: new Date(),
                 updatedAt: new Date(),
                 confirmpassword: hashedPassword,
-                role: client_1.Role.Teacher,
+                role: client_2.Role.Teacher,
             },
             select: {
                 id: true,
@@ -168,84 +169,6 @@ const TeacherEnterScore = (req, res) => __awaiter(void 0, void 0, void 0, functi
     }
 });
 exports.TeacherEnterScore = TeacherEnterScore;
-// ✅ Get all teacher assignments (auth required)
-// export const getTeacherAssignments = async (req: Request, res: Response) => {
-//   try {
-//     // @ts-ignore
-//     const user = req.user;
-//     if (!user) {
-//       return res.status(401).json({ message: "Unauthorized" });
-//     }
-//     const teacher = await prisma.user.findUnique({
-//       where: { id: user.useId },
-//       select: { role: true },
-//     });
-//     if (!teacher || teacher.role !== Role.Teacher) {
-//       return res.status(403).json({ message: "Access denied. Not a teacher." });
-//     }
-//     const assignments = await prisma.teacherClass.findMany({
-//       where: { teacherId: user.useId },
-//       include: {
-//         subject: { select: { id: true, name: true } },
-//         class: { select: { id: true, name: true } },
-//       },
-//     });
-//     const result = assignments.map((assignment) => ({
-//       classId: assignment.class.id,
-//       className: assignment.class.name,
-//       subjectId: assignment.subject.id,
-//       subjectName: assignment.subject.name,
-//     }));
-//     return res.status(200).json({
-//       teacherId: user.useId,
-//       assignments: result,
-//     });
-//   } catch (error) {
-//     console.error("Error fetching teacher assignments:", error);
-//     return res.status(500).json({ message: "Internal server error" });
-//   }
-// };
-// export const getTeacherAssignmentsById = async (
-//   req: Request,
-//   res: Response
-// ) => {
-//   try {
-//     const teacherId = parseInt(req.params.teacherId);
-//     if (!teacherId) {
-//       return res.status(400).json({ message: "Teacher ID is required." });
-//     }
-//     const teacher = await prisma.user.findUnique({
-//       where: { id: teacherId },
-//       select: { fullName: true, role: true },
-//     });
-//     if (!teacher || teacher.role !== Role.Teacher) {
-//       return res
-//         .status(404)
-//         .json({ message: "Teacher not found or not a teacher." });
-//     }
-//     const assignments = await prisma.teacherClass.findMany({
-//       where: { teacherId },
-//       include: {
-//         subject: { select: { id: true, name: true } },
-//         class: { select: { id: true, name: true } },
-//       },
-//     });
-//     const result = assignments.map((assignment) => ({
-//       classId: assignment.class.id,
-//       className: assignment.class.name,
-//       subjectId: assignment.subject.id,
-//       subjectName: assignment.subject.name,
-//     }));
-//     return res.status(200).json({
-//       teacherId,
-//       teacherName: teacher.fullName,
-//       assignments: result,
-//     });
-//   } catch (error) {
-//     console.error("Error fetching assignments by teacherId:", error);
-//     return res.status(500).json({ message: "Internal server error" });
-//   }
-// };
 const getTeacherAssignmentsById = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const teacherId = parseInt(req.params.teacherId);
@@ -256,7 +179,7 @@ const getTeacherAssignmentsById = (req, res) => __awaiter(void 0, void 0, void 0
             where: { id: teacherId },
             select: { fullName: true, role: true },
         });
-        if (!teacher || teacher.role !== client_1.Role.Teacher) {
+        if (!teacher || teacher.role !== client_2.Role.Teacher) {
             return res
                 .status(404)
                 .json({ message: "Teacher not found or not a teacher." });
@@ -294,6 +217,7 @@ const assignTeacherToClassSubject = (req, res) => __awaiter(void 0, void 0, void
         if (!teacherId || !classId || !subjectId) {
             return res.status(400).json({ message: "All fields are required" });
         }
+        // Step 1: Check for existing assignment
         const existing = yield prisma.teacherClass.findFirst({
             where: { teacherId, classId, subjectId },
         });
@@ -302,6 +226,7 @@ const assignTeacherToClassSubject = (req, res) => __awaiter(void 0, void 0, void
                 .status(409)
                 .json({ message: "This assignment already exists" });
         }
+        // Step 2: Create the new assignment
         const created = yield prisma.teacherClass.create({
             data: { teacherId, classId, subjectId },
             include: {
@@ -309,11 +234,13 @@ const assignTeacherToClassSubject = (req, res) => __awaiter(void 0, void 0, void
                 subject: true,
             },
         });
+        // Step 3: Fetch teacher name
         const teacher = yield prisma.user.findUnique({
             where: { id: teacherId },
             select: { fullName: true },
         });
         return res.status(201).json({
+            message: "Teacher assigned successfully",
             teacherName: teacher === null || teacher === void 0 ? void 0 : teacher.fullName,
             classId: created.class.id,
             className: created.class.name,
@@ -322,6 +249,12 @@ const assignTeacherToClassSubject = (req, res) => __awaiter(void 0, void 0, void
         });
     }
     catch (error) {
+        if (error instanceof client_1.Prisma.PrismaClientKnownRequestError &&
+            error.code === "P2002") {
+            return res.status(400).json({
+                message: "Duplicate assignment: Teacher already assigned to this class and subject",
+            });
+        }
         console.error("Error assigning teacher:", error);
         return res.status(500).json({ message: "Internal server error" });
     }
@@ -330,16 +263,24 @@ exports.assignTeacherToClassSubject = assignTeacherToClassSubject;
 // PATCH /exam/teacher/assignments
 const updateTeacherAssignment = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const { assignmentId, classId, subjectId } = req.body;
-        if (!assignmentId || !classId || !subjectId) {
+        const { assignmentId, classId, subjectId, teacherId } = req.body;
+        if (!assignmentId || !classId || !subjectId || !teacherId) {
             return res.status(400).json({ message: "All fields are required" });
         }
-        const existing = yield prisma.teacherClass.findUnique({
-            where: { id: assignmentId },
+        // 1. Check if a different record already has this (teacherId, classId)
+        const duplicate = yield prisma.teacherClass.findFirst({
+            where: {
+                teacherId,
+                classId,
+                NOT: { id: assignmentId }, // ensure we're not comparing with the same record
+            },
         });
-        if (!existing) {
-            return res.status(404).json({ message: "Assignment not found" });
+        if (duplicate) {
+            return res.status(400).json({
+                message: "This teacher is already assigned to this class",
+            });
         }
+        // 2. Update the assignment
         const updated = yield prisma.teacherClass.update({
             where: { id: assignmentId },
             data: {
@@ -366,6 +307,12 @@ const updateTeacherAssignment = (req, res) => __awaiter(void 0, void 0, void 0, 
         });
     }
     catch (error) {
+        if (error instanceof client_1.Prisma.PrismaClientKnownRequestError &&
+            error.code === "P2002") {
+            return res.status(400).json({
+                message: "Duplicate assignment: Teacher already assigned to this class",
+            });
+        }
         console.error("Update assignment error:", error);
         return res.status(500).json({ message: "Internal server error" });
     }
@@ -761,7 +708,7 @@ const getTeacherDashboardData = (req, res) => __awaiter(void 0, void 0, void 0, 
                 role: true,
             },
         });
-        if (!teacher || teacher.role !== client_1.Role.Teacher) {
+        if (!teacher || teacher.role !== client_2.Role.Teacher) {
             return res.status(404).json({ message: "Teacher not found" });
         }
         // ✅ Get teacher's assignments (class + subject)

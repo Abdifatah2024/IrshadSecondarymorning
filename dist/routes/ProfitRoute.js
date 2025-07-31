@@ -1,0 +1,24 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = __importDefault(require("express"));
+const profitLogController_1 = require("../controller/profitLogController");
+const authaniticator_1 = require("../middlewares/authaniticator");
+const Ledeger_Controller_1 = require("../controller/Ledeger.Controller");
+const router = express_1.default.Router();
+router.get("/byYear/:year", profitLogController_1.getProfitLogsByYear);
+router.post("/profitLogs", profitLogController_1.createProfitLog);
+router.get("/profitLogs", profitLogController_1.getAllProfitLogs);
+router.get("/profitLogs/:id", profitLogController_1.getProfitLogById);
+router.put("/profitLogs/:id", profitLogController_1.updateProfitLog);
+router.delete("/profitLogs/:id", profitLogController_1.deleteProfitLog);
+router.post("/auto", profitLogController_1.createProfitLogAuto);
+router.put("/update", profitLogController_1.AutoUpdateProfitLog);
+router.post("/profitlogs", authaniticator_1.authenticate, profitLogController_1.createProfitLogAndAutoDeposit);
+router.post("/create", authaniticator_1.authenticate, profitLogController_1.createProfitLog);
+router.post("/auto-create", authaniticator_1.authenticate, Ledeger_Controller_1.autoCreateProfitLogAndDeposit);
+router.get("/cash-ledger", profitLogController_1.getAllCashLedgerEntries);
+router.post("/manual-ledger", authaniticator_1.authenticate, profitLogController_1.createManualLedgerEntry);
+exports.default = router;

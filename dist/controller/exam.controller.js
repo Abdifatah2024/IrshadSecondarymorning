@@ -9,7 +9,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getStudentExamScores = exports.updateTenSubjects = exports.deleteExamScore = exports.updateExamScore = exports.getTotalScoreByAcademicYear = exports.upgradeStudentClass = exports.upgradeAllStudents = exports.getYearlyProgressReportByStudent = exports.getMidtermMonthlyReportByClass = exports.getFinalExamReportByClass = exports.getExamReportByClass = exports.listStudentExams = exports.AcademicYear = exports.registerTenSubjects = exports.RegisterScore = exports.CreateSubjects = exports.GetExamType = exports.CreateExamType = void 0;
+exports.getParentStudentExamSummary = exports.getStudentExamScores = exports.updateTenSubjects = exports.deleteExamScore = exports.updateExamScore = exports.getTotalScoreByAcademicYear = exports.upgradeStudentClass = exports.upgradeAllStudents = exports.getYearlyProgressReportByStudent = exports.getMidtermMonthlyReportByClass = exports.getFinalExamReportByClass = exports.getExamReportByClass = exports.listStudentExams = exports.AcademicYear = exports.registerTenSubjects = exports.RegisterScore = exports.CreateSubjects = exports.GetExamType = exports.CreateExamType = void 0;
 const client_1 = require("@prisma/client");
 const prisma = new client_1.PrismaClient();
 // Create Exam Type
@@ -1148,3 +1148,93 @@ const getStudentExamScores = (req, res) => __awaiter(void 0, void 0, void 0, fun
     }
 });
 exports.getStudentExamScores = getStudentExamScores;
+const getParentStudentExamSummary = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        // @ts-ignore
+        const user = req.user.useId;
+        // if (!user || user.Role !== "PARENT") {
+        //   return res.status(403).json({
+        //     message: "Access denied. Only parents can access this data.",
+        //   });
+        // }
+        const parentUserId = user.useId;
+        const students = yield prisma.student.findMany({
+            where: {
+                parentUserId,
+                isdeleted: false,
+            },
+            select: {
+                id: true,
+                fullname: true,
+                classes: { select: { name: true } },
+                Score: {
+                    select: {
+                        marks: true,
+                        exam: {
+                            select: {
+                                type: true,
+                            },
+                        },
+                        subject: {
+                            select: {
+                                name: true,
+                            },
+                        },
+                    },
+                },
+            },
+        });
+        if (!students.length) {
+            return res.status(404).json({
+                message: "No students found for this parent",
+            });
+        }
+        const result = students.map((student) => {
+            var _a;
+            const subjectSummary = {};
+            student.Score.forEach((score) => {
+                var _a;
+                const subjectName = score.subject.name;
+                const examType = (_a = score.exam) === null || _a === void 0 ? void 0 : _a.type;
+                if (!subjectSummary[subjectName]) {
+                    subjectSummary[subjectName] = {
+                        subject: subjectName,
+                        monthly: 0,
+                        midterm: 0,
+                        final: 0,
+                        totalMarks: 0,
+                    };
+                }
+                if (examType === "MONTHLY") {
+                    subjectSummary[subjectName].monthly = score.marks;
+                }
+                else if (examType === "MIDTERM") {
+                    subjectSummary[subjectName].midterm = score.marks;
+                }
+                else if (examType === "FINAL") {
+                    subjectSummary[subjectName].final = score.marks;
+                }
+                subjectSummary[subjectName].totalMarks += score.marks;
+            });
+            return {
+                id: student.id,
+                fullname: student.fullname,
+                class: ((_a = student.classes) === null || _a === void 0 ? void 0 : _a.name) || "N/A",
+                exams: Object.values(subjectSummary),
+            };
+        });
+        res.status(200).json({
+            success: true,
+            message: "Exam summaries fetched successfully",
+            data: result,
+        });
+    }
+    catch (error) {
+        console.error("Error fetching parent student exam summary:", error);
+        res.status(500).json({
+            message: "Server error while fetching exam summaries",
+            error: error instanceof Error ? error.message : "Unknown error",
+        });
+    }
+});
+exports.getParentStudentExamSummary = getParentStudentExamSummary;

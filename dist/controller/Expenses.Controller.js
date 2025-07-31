@@ -22,8 +22,20 @@ const createExpense = (req, res) => __awaiter(void 0, void 0, void 0, function* 
         const expenseDate = new Date(date);
         const month = expenseDate.getMonth() + 1;
         const year = expenseDate.getFullYear();
-        if (!category || !amount || amount <= 0 || !paymentMethod) {
+        if (!category || !amount || amount <= 0 || !paymentMethod || !date) {
             return res.status(400).json({ message: "Invalid fields." });
+        }
+        // ✅ New: Block expenses not in current month/year
+        const now = new Date();
+        const currentMonth = now.getMonth() + 1;
+        const currentYear = now.getFullYear();
+        if (month !== currentMonth || year !== currentYear) {
+            return res.status(400).json({
+                message: "Expenses can only be created for the current month and year.",
+                currentMonth,
+                currentYear,
+                attempted: { month, year },
+            });
         }
         const financials = yield (0, finance_1.getMonthlyFinancialStatus)(month, year, prisma);
         if (amount > financials.remaining) {
@@ -95,12 +107,27 @@ const updateExpense = (req, res) => __awaiter(void 0, void 0, void 0, function* 
         if (!category || !amount || amount <= 0 || !paymentMethod || !date) {
             return res.status(400).json({ message: "Invalid input fields" });
         }
+        // ✅ Check for current month/year only
+        const newDate = new Date(date);
+        const inputMonth = newDate.getMonth() + 1;
+        const inputYear = newDate.getFullYear();
+        const now = new Date();
+        const currentMonth = now.getMonth() + 1;
+        const currentYear = now.getFullYear();
+        if (inputMonth !== currentMonth || inputYear !== currentYear) {
+            return res.status(400).json({
+                message: "You can only update expenses to the current month and year.",
+                currentMonth,
+                currentYear,
+                attempted: { inputMonth, inputYear },
+            });
+        }
         const updated = yield prisma.expense.update({
             where: { id },
             data: {
                 category,
                 amount,
-                date: new Date(date),
+                date: newDate,
                 description,
                 paymentMethod,
                 approvedBy,
@@ -122,6 +149,21 @@ const deleteExpense = (req, res) => __awaiter(void 0, void 0, void 0, function* 
         if (!existing) {
             return res.status(404).json({ message: "Expense not found" });
         }
+        // ✅ Only allow deletion if expense date is in current month/year
+        const expenseDate = new Date(existing.date);
+        const expenseMonth = expenseDate.getMonth() + 1;
+        const expenseYear = expenseDate.getFullYear();
+        const now = new Date();
+        const currentMonth = now.getMonth() + 1;
+        const currentYear = now.getFullYear();
+        if (expenseMonth !== currentMonth || expenseYear !== currentYear) {
+            return res.status(400).json({
+                message: "You can only delete expenses from the current month and year.",
+                currentMonth,
+                currentYear,
+                attempted: { expenseMonth, expenseYear },
+            });
+        }
         yield prisma.expense.delete({ where: { id } });
         res.status(200).json({ message: "Expense deleted", deletedId: id });
     }
@@ -131,68 +173,6 @@ const deleteExpense = (req, res) => __awaiter(void 0, void 0, void 0, function* 
     }
 });
 exports.deleteExpense = deleteExpense;
-// export const getMonthlyBalance = async (req: Request, res: Response) => {
-//   try {
-//     const month = parseInt(req.query.month as string);
-//     const year = parseInt(req.query.year as string);
-//     if (!month || !year) {
-//       return res.status(400).json({ message: "Month and Year are required." });
-//     }
-//     const startDate = new Date(year, month - 1, 1);
-//     const endDate = new Date(year, month, 0, 23, 59, 59, 999);
-//     // Total income
-//     const allocations = await prisma.paymentAllocation.findMany({
-//       where: {
-//         payment: {
-//           date: {
-//             gte: startDate,
-//             lte: endDate,
-//           },
-//         },
-//       },
-//       select: { amount: true },
-//     });
-//     const totalIncome = allocations.reduce(
-//       (sum, alloc) => sum + Number(alloc.amount),
-//       0
-//     );
-//     // Total advance
-//     const advances = await prisma.employeeAdvance.findMany({
-//       where: { month, year },
-//       select: { amount: true },
-//     });
-//     const totalAdvance = advances.reduce(
-//       (sum, adv) => sum + Number(adv.amount),
-//       0
-//     );
-//     // Total expense
-//     const expenses = await prisma.expense.findMany({
-//       where: {
-//         date: {
-//           gte: startDate,
-//           lte: endDate,
-//         },
-//       },
-//       select: { amount: true },
-//     });
-//     const totalExpense = expenses.reduce(
-//       (sum, exp) => sum + Number(exp.amount),
-//       0
-//     );
-//     const used = totalAdvance + totalExpense;
-//     const remaining = totalIncome - used;
-//     return res.status(200).json({
-//       totalIncome,
-//       totalAdvance,
-//       totalExpense,
-//       used,
-//       remaining,
-//     });
-//   } catch (error) {
-//     console.error("Error calculating balance:", error);
-//     return res.status(500).json({ message: "Internal server error" });
-//   }
-// };
 const getMonthlyBalance = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const month = parseInt(req.query.month);

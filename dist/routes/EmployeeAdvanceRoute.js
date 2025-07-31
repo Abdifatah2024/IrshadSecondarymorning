@@ -9,8 +9,11 @@ router.post("/employees/:id/advance-and-update-income", authaniticator_1.authent
 router.get("/employee-advances", authaniticator_1.authenticate, EmployeeAdvace_controller_1.getEmployeeAdvances);
 router.get("/income/monthly", authaniticator_1.authenticate, EmployeeAdvace_controller_1.getMonthlyIncomeOverview);
 router.put("/employee-advances/:id", authaniticator_1.authenticate, EmployeeAdvace_controller_1.updateEmployeeAdvance);
+router.post("/employee/salary/pay-all", authaniticator_1.authenticate, EmployeeAdvace_controller_1.payAllEmployeesRemainingSalary);
 // ✅ Delete a specific advance
 // DELETE /api/employee-advances/:id
 router.delete("/employee-advances/:id", authaniticator_1.authenticate, EmployeeAdvace_controller_1.deleteEmployeeAdvance);
 router.get("/employee-balance", EmployeeAdvace_controller_1.getEmployeeSalaryAdvanceBalance);
+router.get("/All/employee-balance", EmployeeAdvace_controller_1.getAllEmployeesAdnace);
+router.get("/employee-advanceDetail", EmployeeAdvace_controller_1.getEmployeeAdvancesDetail);
 exports.default = router;
