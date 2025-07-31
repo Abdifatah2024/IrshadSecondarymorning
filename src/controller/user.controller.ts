@@ -1327,10 +1327,6 @@ export const getAllAnnouncementsForAdmin = async (
   //@ts-ignore
   const userRole = req.user.role;
 
-  if (userRole !== "ADMIN") {
-    return res.status(403).json({ message: "Access denied: Admins only." });
-  }
-
   const now = new Date();
 
   try {

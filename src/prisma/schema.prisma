@@ -65,33 +65,31 @@ model User {
   parentStudents     Student[] @relation("ParentRelation")
 
   // ✅ Other Relations (unchanged)
-  approvedDiscounts  DiscountLog[]        @relation("ApprovedDiscounts")
-  role               Role                 @default(USER)
-  notes              note[]
-  tasks              task[]
-  classes            classes[]
-  StudentFee         StudentFee[]
-  Attendance         Attendance[]
-  Score              Score[]
-  Discipline         Discipline[]
-  Employee           Employee[]
-  DisciplineComment  DisciplineComment[]
-  Payment            Payment[]
-  TeacherAssignment  TeacherAssignment[]
-  TeacherClass       TeacherClass[]
-  EmployeeAdvance    EmployeeAdvance[]
-  Expense            Expense[]
-  DiscountLog        DiscountLog[]
-  Document           Document[]
-  Announcement       Announcement[]
-  assignedWorkPlans  WorkPlan[]           @relation("AssignedWorkPlans")
-  reviewedWorkPlans  WorkPlan[]           @relation("ReviewedWorkPlans")
-  WorkPlanComment    WorkPlanComment[]
-  StudentDeletionLog StudentDeletionLog[]
-  deletedStudents    StudentDeletionLog[] @relation("DeletedBy")
-  restoredStudents   StudentDeletionLog[] @relation("RestoredBy")
-  ProfitLog          ProfitLog[]
-  CashLedger         CashLedger[]
+  approvedDiscounts DiscountLog[]        @relation("ApprovedDiscounts")
+  role              Role                 @default(USER)
+  notes             note[]
+  tasks             task[]
+  classes           classes[]
+  StudentFee        StudentFee[]
+  Attendance        Attendance[]
+  Score             Score[]
+  Discipline        Discipline[]
+  Employee          Employee[]
+  DisciplineComment DisciplineComment[]
+  Payment           Payment[]
+  TeacherAssignment TeacherAssignment[]
+  TeacherClass      TeacherClass[]
+  EmployeeAdvance   EmployeeAdvance[]
+  Expense           Expense[]
+  DiscountLog       DiscountLog[]
+  Document          Document[]
+  Announcement      Announcement[]
+  assignedWorkPlans WorkPlan[]           @relation("AssignedWorkPlans")
+  reviewedWorkPlans WorkPlan[]           @relation("ReviewedWorkPlans")
+  WorkPlanComment   WorkPlanComment[]
+  DeletedStudents   StudentDeletionLog[] @relation("DeletedBy")
+  ProfitLog         ProfitLog[]
+  CashLedger        CashLedger[]
 }
 
 model Document {
@@ -150,6 +148,7 @@ model Student {
   parentEmail        String? // ✅ New: Parent email
   district           String // ✅ New: District
   transfer           Boolean        @default(false) // ✅ New: Transfer flag
+  studentNumber      Int?           @unique
   bus                String?
   address            String?
   previousSchool     String?
@@ -169,7 +168,7 @@ model Student {
   // ✅ Updated Fields
   admissionDate  DateTime @default(now())
   academicYearId Int?     @default(1)
-  rollNumber     String?  @unique // ✅ Renamed from admissionNumber
+  rollNumber     String? // ✅ Renamed from admissionNumber
   registeredById Int?     @default(1)
   userid         Int?     @default(1)
   parentUserId   Int?
@@ -195,19 +194,15 @@ model Student {
 }
 
 model StudentDeletionLog {
-  id         Int       @id @default(autoincrement())
-  studentId  Int
-  reason     String
-  userId     Int? // User who deleted the student
-  restoredBy Int? // User who restored the student
-  deletedAt  DateTime  @default(now())
-  restoredAt DateTime?
+  id        Int      @id @default(autoincrement())
+  studentId Int
+  reason    String
+  userId    Int? // User who deleted the student
+  deletedAt DateTime @default(now())
 
-  // Relations
-  Student        Student @relation(fields: [studentId], references: [id])
-  deletedByUser  User?   @relation("DeletedBy", fields: [userId], references: [id], map: "fk_deleted_by_user_custom")
-  restoredByUser User?   @relation("RestoredBy", fields: [restoredBy], references: [id], map: "fk_restored_by_user")
-  User           User?   @relation(fields: [userId], references: [id])
+  // ✅ Relations
+  Student       Student @relation(fields: [studentId], references: [id])
+  deletedByUser User?   @relation("DeletedBy", fields: [userId], references: [id], map: "fk_deleted_by_user_custom")
 }
 
 model StudentFee {

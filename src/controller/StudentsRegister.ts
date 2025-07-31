@@ -153,124 +153,6 @@ export const createStudent = async (req: Request, res: Response) => {
   }
 };
 
-// export const createMultipleStudentsByExcel = async (
-//   req: Request,
-//   res: Response
-// ) => {
-//   try {
-//     // @ts-ignore
-//     const user = req.user;
-
-//     if (!req.file) {
-//       return res.status(400).json({ message: "No file uploaded" });
-//     }
-
-//     const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
-//     const sheetName = workbook.SheetNames[0];
-//     const worksheet = workbook.Sheets[sheetName];
-//     const studentsData = XLSX.utils.sheet_to_json(worksheet);
-
-//     if (!Array.isArray(studentsData) || studentsData.length === 0) {
-//       return res
-//         .status(400)
-//         .json({ message: "Excel file is empty or invalid" });
-//     }
-
-//     const createdStudents = [];
-//     const skippedStudents: { row: number; reason: string }[] = [];
-
-//     for (let i = 0; i < studentsData.length; i++) {
-//       const row = studentsData[i];
-//       const {
-//         firstname,
-//         middlename,
-//         lastname,
-//         classId,
-//         phone,
-//         gender,
-//         Age,
-//         fee,
-//         phone2,
-//         bus,
-//         address,
-//         previousSchool,
-//         motherName,
-//       } = row as any;
-
-//       const rowIndex = i + 2; // Excel row number (header = row 1)
-
-//       // Validate essential fields
-//       if (!firstname || !lastname || !classId || !phone) {
-//         skippedStudents.push({
-//           row: rowIndex,
-//           reason:
-//             "Missing required fields (firstname, lastname, phone, classId)",
-//         });
-//         continue;
-//       }
-
-//       const phoneStr = String(phone);
-//       const busStr = bus ? String(bus) : null;
-
-//       // Check for duplicate phone
-//       const existing = await prisma.student.findFirst({
-//         where: { phone: phoneStr },
-//       });
-
-//       if (existing) {
-//         skippedStudents.push({
-//           row: rowIndex,
-//           reason: "Duplicate phone number",
-//         });
-//         continue;
-//       }
-
-//       const fullname = `${firstname} ${middlename || ""} ${lastname}`.trim();
-
-//       try {
-//         const newStudent = await prisma.student.create({
-//           data: {
-//             firstname,
-//             middlename,
-//             lastname,
-//             fullname,
-//             classId: +classId,
-//             phone: phoneStr,
-//             gender,
-//             Age: Age ? +Age : 0, // ✅ fallback to 0 if missing
-//             fee,
-//             phone2: phone2 ? String(phone2) : null,
-//             bus: busStr, // ✅ bus is string
-//             address,
-//             previousSchool,
-//             motherName,
-//             userid: user.useId, // ✅ ensure useId is correct
-//           },
-//         });
-
-//         createdStudents.push(newStudent);
-//       } catch (err) {
-//         skippedStudents.push({
-//           row: rowIndex,
-//           reason: "Database error during insertion",
-//         });
-//       }
-//     }
-
-//     res.status(201).json({
-//       message: `${createdStudents.length} students uploaded.`,
-//       created: createdStudents.length,
-//       skipped: skippedStudents.length,
-//       skippedDetails: skippedStudents,
-//     });
-//   } catch (error) {
-//     console.error("Upload Error:", error);
-//     res.status(500).json({ message: "Server error while uploading students" });
-//   }
-// };
-
-// Get Single Student by ID
-
 export const createMultipleStudents = async (req: Request, res: Response) => {
   try {
     const studentsData = req.body;
@@ -616,38 +498,128 @@ export const createMultipleStudentsByExcel = async (
   }
 };
 
+// export const getStudentById = async (req: Request, res: Response) => {
+//   try {
+//     const studentId = Number(req.params.id);
+
+//     const student = await prisma.student.findUnique({
+//       where: { id: studentId, isdeleted: false },
+//       include: {
+//         classes: {
+//           select: {
+//             name: true,
+//           },
+//         },
+//         user: {
+//           select: {
+//             fullName: true,
+//           },
+//         },
+//       },
+//     });
+
+//     if (!student) {
+//       return res
+//         .status(404)
+//         .json({ message: "Student not found please try agian" });
+//     }
+
+//     res.status(200).json(student);
+//   } catch (error) {
+//     console.error("Error fetching student:", error);
+//     res.status(500).json({ message: "Server error while fetching student" });
+//   }
+// };
 export const getStudentById = async (req: Request, res: Response) => {
   try {
-    const studentId = Number(req.params.id);
+    const rawId = req.params.id;
+    const identifier = Number(rawId);
 
-    const student = await prisma.student.findUnique({
-      where: { id: studentId, isdeleted: false },
+    if (isNaN(identifier)) {
+      return res.status(400).json({ message: "Invalid ID: must be a number" });
+    }
+
+    const student = await prisma.student.findFirst({
+      where: {
+        isdeleted: false,
+        OR: [
+          { id: identifier },
+          {
+            studentNumber: {
+              equals: identifier,
+              not: null,
+            },
+          },
+        ],
+      },
       include: {
-        classes: {
-          select: {
-            name: true,
-          },
-        },
-        user: {
-          select: {
-            fullName: true,
-          },
-        },
+        classes: { select: { name: true } },
+        user: { select: { email: true } },
       },
     });
 
     if (!student) {
-      return res
-        .status(404)
-        .json({ message: "Student not found please try agian" });
+      return res.status(404).json({ message: "No students found" });
     }
 
-    res.status(200).json(student);
+    return res.status(200).json(student);
   } catch (error) {
-    console.error("Error fetching student:", error);
-    res.status(500).json({ message: "Server error while fetching student" });
+    console.error("Error:", error);
+    return res.status(500).json({ message: "Server error" });
   }
 };
+
+// export const getStudentByIdOrName = async (req: Request, res: Response) => {
+//   try {
+//     const query = req.params.query.trim().replace(/\s+/g, " ");
+//     const isId = !isNaN(Number(query));
+
+//     const students = await prisma.student.findMany({
+//       where: {
+//         isdeleted: false,
+//         ...(isId
+//           ? { id: Number(query) }
+//           : {
+//               OR: [
+//                 { fullname: { contains: query, mode: "insensitive" } },
+//                 { firstname: { contains: query, mode: "insensitive" } },
+//                 { lastname: { contains: query, mode: "insensitive" } },
+//                 {
+//                   AND: [
+//                     {
+//                       firstname: {
+//                         contains: query.split(" ")[0],
+//                         mode: "insensitive",
+//                       },
+//                     },
+//                     {
+//                       lastname: {
+//                         contains: query.split(" ").slice(-1)[0],
+//                         mode: "insensitive",
+//                       },
+//                     },
+//                   ],
+//                 },
+//               ],
+//             }),
+//       },
+//       include: {
+//         classes: { select: { name: true } },
+//         user: { select: { email: true } },
+//       },
+//     });
+
+//     if (students.length === 0) {
+//       return res.status(404).json({ message: "No students found" });
+//     }
+
+//     res.status(200).json(students);
+//   } catch (error) {
+//     console.error("Search error:", error);
+//     res.status(500).json({ message: "Search failed" });
+//   }
+// };
+
 export const getStudentByIdOrName = async (req: Request, res: Response) => {
   try {
     const query = req.params.query.trim().replace(/\s+/g, " ");
@@ -657,7 +629,9 @@ export const getStudentByIdOrName = async (req: Request, res: Response) => {
       where: {
         isdeleted: false,
         ...(isId
-          ? { id: Number(query) }
+          ? {
+              OR: [{ id: Number(query) }, { studentNumber: Number(query) }],
+            }
           : {
               OR: [
                 { fullname: { contains: query, mode: "insensitive" } },
@@ -2480,7 +2454,7 @@ export const updateStudentTransferAndRollNumber = async (
 
     // Optional: Validate if rollNumber is already taken
     if (rollNumber) {
-      const existingRoll = await prisma.student.findUnique({
+      const existingRoll = await prisma.student.findFirst({
         where: { rollNumber },
       });
 
@@ -3081,9 +3055,6 @@ export const softDeleteStudent = async (req: Request, res: Response) => {
 export const listDeletedStudents = async (_req: Request, res: Response) => {
   try {
     const deletedStudents = await prisma.studentDeletionLog.findMany({
-      where: {
-        restoredAt: null, // ✅ Only include non-restored (still deleted)
-      },
       orderBy: { deletedAt: "desc" },
       include: {
         Student: {
@@ -3097,7 +3068,8 @@ export const listDeletedStudents = async (_req: Request, res: Response) => {
             },
           },
         },
-        User: {
+        deletedByUser: {
+          // ✅ corrected relation name
           select: {
             id: true,
             fullName: true,
@@ -3113,9 +3085,9 @@ export const listDeletedStudents = async (_req: Request, res: Response) => {
       className: log.Student.classes?.name || "N/A",
       reason: log.reason,
       deletedAt: log.deletedAt,
-      deletedByUserId: log.User?.id || null,
-      deletedByName: log.User?.fullName || "N/A",
-      deletedByEmail: log.User?.email || "N/A",
+      deletedByUserId: log.deletedByUser?.id || null,
+      deletedByName: log.deletedByUser?.fullName || "N/A",
+      deletedByEmail: log.deletedByUser?.email || "N/A",
     }));
 
     res.status(200).json({
@@ -3167,11 +3139,10 @@ export const restoreDeletedStudent = async (req: Request, res: Response) => {
     });
 
     // Step 3: Update the log entry
-    await prisma.studentDeletionLog.updateMany({
-      where: { studentId, restoredAt: null },
+    await prisma.student.update({
+      where: { id: studentId },
       data: {
-        restoredAt: new Date(),
-        restoredBy: userId, // 👈 record who restored
+        isdeleted: false,
       },
     });
 
@@ -3187,16 +3158,10 @@ export const restoreDeletedStudent = async (req: Request, res: Response) => {
     });
   }
 };
-
 export const listRestoredStudents = async (_req: Request, res: Response) => {
   try {
-    const restoredLogs = await prisma.studentDeletionLog.findMany({
-      where: {
-        restoredAt: {
-          not: null,
-        },
-      },
-      orderBy: { restoredAt: "desc" },
+    const deletedLogs = await prisma.studentDeletionLog.findMany({
+      orderBy: { deletedAt: "desc" },
       include: {
         Student: {
           select: {
@@ -3216,42 +3181,29 @@ export const listRestoredStudents = async (_req: Request, res: Response) => {
             email: true,
           },
         },
-        restoredByUser: {
-          select: {
-            id: true,
-            fullName: true,
-            email: true,
-          },
-        },
       },
     });
 
-    const formatted = restoredLogs.map((log) => ({
+    const formatted = deletedLogs.map((log) => ({
       studentId: log.Student.id,
       fullName: log.Student.fullname,
       className: log.Student.classes?.name || "N/A",
       reason: log.reason,
       deletedAt: log.deletedAt,
-      restoredAt: log.restoredAt,
       deletedBy: {
         id: log.deletedByUser?.id,
         name: log.deletedByUser?.fullName,
         email: log.deletedByUser?.email,
-      },
-      restoredBy: {
-        id: log.restoredByUser?.id,
-        name: log.restoredByUser?.fullName,
-        email: log.restoredByUser?.email,
       },
     }));
 
     res.status(200).json({
       success: true,
       count: formatted.length,
-      restoredStudents: formatted,
+      restoredStudents: formatted, // 🔁 Still using this key in the response for compatibility
     });
   } catch (error) {
-    console.error("Error fetching restored students:", error);
+    console.error("Error fetching restored (deleted) students:", error);
     res.status(500).json({
       success: false,
       message: "Failed to retrieve restored students.",

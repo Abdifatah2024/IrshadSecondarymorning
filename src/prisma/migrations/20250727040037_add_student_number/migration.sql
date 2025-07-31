@@ -103,6 +103,7 @@ CREATE TABLE "Student" (
     "parentEmail" TEXT,
     "district" TEXT NOT NULL,
     "transfer" BOOLEAN NOT NULL DEFAULT false,
+    "studentNumber" INTEGER,
     "bus" TEXT,
     "address" TEXT,
     "previousSchool" TEXT,
@@ -127,6 +128,17 @@ CREATE TABLE "Student" (
     "busId" INTEGER,
 
     CONSTRAINT "Student_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "StudentDeletionLog" (
+    "id" SERIAL NOT NULL,
+    "studentId" INTEGER NOT NULL,
+    "reason" TEXT NOT NULL,
+    "userId" INTEGER,
+    "deletedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "StudentDeletionLog_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -504,7 +516,7 @@ CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
 CREATE UNIQUE INDEX "User_phoneNumber_key" ON "User"("phoneNumber");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Student_rollNumber_key" ON "Student"("rollNumber");
+CREATE UNIQUE INDEX "Student_studentNumber_key" ON "Student"("studentNumber");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "StudentFee_studentId_month_year_key" ON "StudentFee"("studentId", "month", "year");
@@ -583,6 +595,12 @@ ALTER TABLE "Student" ADD CONSTRAINT "Student_classId_fkey" FOREIGN KEY ("classI
 
 -- AddForeignKey
 ALTER TABLE "Student" ADD CONSTRAINT "Student_busId_fkey" FOREIGN KEY ("busId") REFERENCES "Bus"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "StudentDeletionLog" ADD CONSTRAINT "StudentDeletionLog_studentId_fkey" FOREIGN KEY ("studentId") REFERENCES "Student"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "StudentDeletionLog" ADD CONSTRAINT "fk_deleted_by_user_custom" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "StudentFee" ADD CONSTRAINT "StudentFee_studentId_fkey" FOREIGN KEY ("studentId") REFERENCES "Student"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

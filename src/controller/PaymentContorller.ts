@@ -3627,147 +3627,6 @@ export const payFullForMonthByStudent = async (req: Request, res: Response) => {
   }
 };
 
-// export const searchStudentsByNameOrId = async (req: Request, res: Response) => {
-//   try {
-//     const { query } = req.query;
-
-//     if (!query || typeof query !== "string") {
-//       return res
-//         .status(400)
-//         .json({ message: "Query parameter 'query' is required" });
-//     }
-
-//     let studentData;
-//     let parentData = {
-//       parentName: "",
-//       phone: "",
-//     };
-
-//     if (/^\d+$/.test(query.trim())) {
-//       // Search by student ID
-//       studentData = await prisma.student.findFirst({
-//         where: {
-//           id: Number(query.trim()),
-//           isdeleted: false,
-//         },
-//         include: {
-//           parentUser: {
-//             select: {
-//               fullName: true,
-//               phoneNumber: true,
-//             },
-//           },
-//           StudentFee: {
-//             where: {
-//               isPaid: false,
-//             },
-//             include: {
-//               PaymentAllocation: {
-//                 select: {
-//                   amount: true,
-//                 },
-//               },
-//             },
-//           },
-//         },
-//       });
-
-//       if (studentData) {
-//         parentData = {
-//           parentName: studentData.parentUser?.fullName || "",
-//           phone: studentData.parentUser?.phoneNumber || "",
-//         };
-//       }
-//     } else {
-//       // Search by student name
-//       studentData = await prisma.student.findFirst({
-//         where: {
-//           fullname: {
-//             contains: query.trim(),
-//             mode: "insensitive",
-//           },
-//           isdeleted: false,
-//         },
-//         include: {
-//           parentUser: {
-//             select: {
-//               fullName: true,
-//               phoneNumber: true,
-//             },
-//           },
-//           StudentFee: {
-//             where: {
-//               isPaid: false,
-//             },
-//             include: {
-//               PaymentAllocation: {
-//                 select: {
-//                   amount: true,
-//                 },
-//               },
-//             },
-//           },
-//         },
-//         orderBy: { fullname: "asc" },
-//       });
-
-//       if (studentData) {
-//         parentData = {
-//           parentName: studentData.parentUser?.fullName || "",
-//           phone: studentData.parentUser?.phoneNumber || "",
-//         };
-//       }
-//     }
-
-//     if (!studentData) {
-//       return res.status(404).json({ message: "No students found" });
-//     }
-
-//     // Calculate student balance and months
-//     const feeAmount = Number(studentData.fee) || 0;
-//     let balance = 0;
-//     const months: { month: number; year: number; due: number }[] = [];
-
-//     studentData.StudentFee.forEach((fee) => {
-//       const paid = fee.PaymentAllocation.reduce(
-//         (sum, alloc) => sum + (Number(alloc.amount) || 0),
-//         0
-//       );
-//       const due = Math.max(0, feeAmount - paid);
-//       if (due > 0) {
-//         balance += due;
-//         months.push({
-//           month: fee.month,
-//           year: fee.year,
-//           due: due,
-//         });
-//       }
-//     });
-
-//     // Return formatted response matching your example
-//     const response = {
-//       parentName: parentData.parentName,
-//       phone: parentData.phone,
-//       totalFamilyBalance: balance,
-//       students: [
-//         {
-//           studentId: studentData.id,
-//           fullname: studentData.fullname,
-//           balance: balance,
-//           months: months,
-//         },
-//       ],
-//     };
-
-//     res.status(200).json(response);
-//   } catch (error) {
-//     console.error("Error searching students:", error);
-//     res.status(500).json({
-//       message: "Internal server error",
-//       error: error instanceof Error ? error.message : String(error),
-//     });
-//   }
-// };
 export const searchStudentsByNameOrId = async (req: Request, res: Response) => {
   try {
     const { query } = req.query;
@@ -4028,5 +3887,79 @@ export const getAllPaymentsByStudentId = async (
   } catch (error) {
     console.error("Error fetching student payments:", error);
     res.status(500).json({ success: false, message: "Something went wrong" });
+  }
+};
+
+export const getStudentsWithBalancesAndDueMonths = async (
+  _req: Request,
+  res: Response
+) => {
+  try {
+    const students = await prisma.student.findMany({
+      where: {
+        isdeleted: false,
+        status: "ACTIVE",
+      },
+      include: {
+        classes: { select: { name: true } },
+        StudentFee: {
+          where: { isPaid: false },
+          include: {
+            PaymentAllocation: { select: { amount: true } },
+          },
+          orderBy: [{ year: "asc" }, { month: "asc" }],
+        },
+        StudentAccount: true,
+      },
+    });
+
+    const result = [];
+
+    for (const student of students) {
+      const monthlyFee = Number(student.fee);
+      let totalBalance = 0;
+      const monthsDue: { month: number; year: number; due: number }[] = [];
+
+      for (const fee of student.StudentFee) {
+        const totalPaid = fee.PaymentAllocation.reduce(
+          (sum, alloc) => sum + Number(alloc.amount),
+          0
+        );
+
+        const due = Math.max(0, monthlyFee - totalPaid);
+        if (due > 0) {
+          monthsDue.push({
+            month: fee.month,
+            year: fee.year,
+            due,
+          });
+          totalBalance += due;
+        }
+      }
+
+      const carryForward = Number(student.StudentAccount?.carryForward || 0);
+      const finalBalance = Math.max(0, totalBalance - carryForward);
+
+      if (finalBalance > 0) {
+        result.push({
+          studentId: student.id,
+          fullname: student.fullname,
+          className: student.classes?.name || "N/A",
+          balance: finalBalance,
+          carryForward,
+          monthsDue,
+        });
+      }
+    }
+
+    res.status(200).json({
+      count: result.length,
+      students: result,
+    });
+  } catch (error) {
+    console.error("Error fetching student balances with months:", error);
+    res.status(500).json({
+      message: "Internal server error",
+    });
   }
 };

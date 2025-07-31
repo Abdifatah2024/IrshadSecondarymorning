@@ -7,6 +7,7 @@ import {
   getEmployeeAdvancesDetail,
   getEmployeeSalaryAdvanceBalance,
   getMonthlyIncomeOverview,
+  payAllEmployeesRemainingSalary,
   updateEmployeeAdvance,
 } from "../controller/EmployeeAdvace.controller";
 import { authenticate } from "../middlewares/authaniticator";
@@ -21,7 +22,11 @@ router.post(
 router.get("/employee-advances", authenticate, getEmployeeAdvances);
 router.get("/income/monthly", authenticate, getMonthlyIncomeOverview);
 router.put("/employee-advances/:id", authenticate, updateEmployeeAdvance);
-
+router.post(
+  "/employee/salary/pay-all",
+  authenticate,
+  payAllEmployeesRemainingSalary
+);
 // ✅ Delete a specific advance
 // DELETE /api/employee-advances/:id
 router.delete("/employee-advances/:id", authenticate, deleteEmployeeAdvance);

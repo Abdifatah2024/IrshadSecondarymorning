@@ -296,3 +296,73 @@ export const updatePaymentVoucher = async (req: Request, res: Response) => {
     return res.status(500).json({ message: "Failed to update payment" });
   }
 };
+
+export const getLastPaymentForStudent = async (studentId: number) => {
+  try {
+    const lastPayment = await prisma.payment.findFirst({
+      where: {
+        studentId,
+      },
+      orderBy: {
+        date: "desc",
+      },
+      include: {
+        student: true,
+        user: true,
+        allocations: {
+          include: {
+            studentFee: true,
+          },
+        },
+      },
+    });
+
+    return lastPayment;
+  } catch (error) {
+    console.error("Error fetching last payment:", error);
+    throw new Error("Could not retrieve the last payment");
+  }
+};
+
+export const fetchLastGlobalPayment = async (req: Request, res: Response) => {
+  try {
+    const payment = await prisma.payment.findFirst({
+      orderBy: {
+        date: "desc",
+      },
+      include: {
+        student: {
+          select: {
+            id: true,
+            fullname: true,
+          },
+        },
+        user: {
+          select: {
+            id: true,
+            fullName: true,
+          },
+        },
+        allocations: {
+          select: {
+            studentFee: {
+              select: {
+                month: true,
+                year: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!payment) {
+      return res.status(404).json({ message: "No payment found" });
+    }
+
+    res.status(200).json({ payment });
+  } catch (error) {
+    console.error("Error fetching last payment:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};

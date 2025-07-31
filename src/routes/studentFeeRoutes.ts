@@ -31,6 +31,7 @@ import {
   searchStudentsByNameOrId,
   getUserPaymentCollections,
   getAllPaymentsByStudentId,
+  getStudentsWithBalancesAndDueMonths,
 } from "../controller/PaymentContorller";
 import { authenticate } from "../middlewares/authaniticator";
 
@@ -75,5 +76,6 @@ router.post("/payment/check-last-used-number", checkLastPaymentByNumber);
 router.post("/payment/student", authenticate, payFullForMonthByStudent);
 router.get("/payments/collection-summary", getUserPaymentCollections);
 router.post("/payments/by-student", getAllPaymentsByStudentId);
+router.get("/GetStudent/Balance/Month", getStudentsWithBalancesAndDueMonths);
 
 export default router;

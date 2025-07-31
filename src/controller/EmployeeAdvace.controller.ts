@@ -777,3 +777,97 @@ export const getEmployeeAdvancesDetail = async (
     res.status(500).json({ message: "Internal server error" });
   }
 };
+
+export const payAllEmployeesRemainingSalary = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const { month, year } = req.body;
+
+    // @ts-ignore
+    const user = req.user as { useId: number };
+
+    if (!month || !year) {
+      return res.status(400).json({ message: "Month and year are required" });
+    }
+
+    const now = new Date();
+    const currentMonth = now.getMonth() + 1;
+    const currentYear = now.getFullYear();
+
+    if (month !== currentMonth || year !== currentYear) {
+      return res.status(400).json({
+        message: "You can only pay salaries for the current month and year.",
+        currentMonth,
+        currentYear,
+        attempted: { month, year },
+      });
+    }
+
+    const employees = await prisma.employee.findMany({
+      select: { id: true, fullName: true, salary: true, phone: true },
+    });
+
+    const results: any[] = [];
+
+    await prisma.$transaction(async (tx) => {
+      for (const emp of employees) {
+        const advances = await tx.employeeAdvance.findMany({
+          where: { employeeId: emp.id, month, year },
+          select: { amount: true },
+        });
+
+        const totalAdvance = advances.reduce(
+          (sum, adv) => sum + Number(adv.amount),
+          0
+        );
+
+        const remainingSalary = emp.salary - totalAdvance;
+
+        if (remainingSalary <= 0) {
+          results.push({
+            employeeId: emp.id,
+            name: emp.fullName,
+            message: "Salary already paid or fully covered by advances",
+            salary: emp.salary,
+            totalAdvance,
+            remainingSalary: 0,
+          });
+          continue;
+        }
+
+        const payment = await tx.employeeAdvance.create({
+          data: {
+            employeeId: emp.id,
+            amount: remainingSalary,
+            reason: "Salary",
+            month,
+            year,
+            createdById: user.useId,
+          },
+        });
+
+        results.push({
+          employeeId: emp.id,
+          name: emp.fullName,
+          salary: emp.salary,
+          totalAdvance,
+          remainingSalary,
+          message: "Salary paid",
+          recordId: payment.id,
+        });
+      }
+    });
+
+    return res.status(200).json({
+      message: "Salary processing completed",
+      month,
+      year,
+      results,
+    });
+  } catch (error) {
+    console.error("Error paying all salaries:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
