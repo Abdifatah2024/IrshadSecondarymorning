@@ -151,8 +151,10 @@ export const login = async (req: Request, res: Response) => {
       return res.status(401).json({ message: "Incorrect email or password." });
     }
 
-    const unlockAfterMs = user.lockCount === 0 ? 1 * 60 * 1000 : 5 * 60 * 1000;
+    // Determine current lock duration
+    const unlockAfterMs = user.lockCount === 0 ? 1 * 60 * 1000 : 5 * 60 * 1000; // 1 min or 5 min
 
+    // Auto-unlock if enough time has passed
     if (user.isLocked && user.lockedAt) {
       const now = new Date();
       const lockedForMs = now.getTime() - new Date(user.lockedAt).getTime();
@@ -171,6 +173,7 @@ export const login = async (req: Request, res: Response) => {
       }
     }
 
+    // Still locked?
     if (user.isLocked) {
       const remainingTimeMs =
         unlockAfterMs - (Date.now() - new Date(user.lockedAt!).getTime());
@@ -193,7 +196,7 @@ export const login = async (req: Request, res: Response) => {
             failedAttempts: updatedAttempts,
             isLocked: true,
             lockedAt: new Date(),
-            lockCount: user.lockCount + 1,
+            lockCount: user.lockCount + 1, // Increase lock count
           },
         });
 
@@ -217,6 +220,7 @@ export const login = async (req: Request, res: Response) => {
       });
     }
 
+    // ✅ Successful login — reset everything
     await prisma.user.update({
       where: { id: user.id },
       data: {
@@ -234,7 +238,7 @@ export const login = async (req: Request, res: Response) => {
         email: user.email,
         username: user.username,
         fullname: user.fullName,
-        role: user.role, // ✅ lowercase key
+        Role: user.role,
       },
       Access_token: genarateToken(user),
     });
@@ -1199,10 +1203,7 @@ export const updateUserRole = async (req: Request, res: Response) => {
     // @ts-ignore — user injected by auth middleware
     const currentUser = req.user;
 
-    if (
-      !currentUser ||
-      !["ADMIN", "ACADEMY", "USER"].includes(currentUser.role)
-    ) {
+    if (!currentUser || !["ADMIN", "ACADEMY"].includes(currentUser.role)) {
       return res
         .status(403)
         .json({ message: "Only ADMIN or ACADEMY can update roles." });
