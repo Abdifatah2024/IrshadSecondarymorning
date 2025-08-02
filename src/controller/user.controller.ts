@@ -433,12 +433,25 @@ export const deleteUser = async (req: Request, res: Response) => {
 // ─────────────────────────────────────────────────────
 // Token Generator
 // ─────────────────────────────────────────────────────
+// const genarateToken = (user: User): string => {
+//   const payload = {
+//     useId: user.id,
+//     userName: user.username,
+//     joined_at: user.createdAt,
+//     role: user.role,
+//   };
+
+//   return jwt.sign(payload, process.env.JWT_SECRET_KEY as string, {
+//     issuer: "Api.Irshaad.com",
+//     expiresIn: "1d",
+//   });
+// };
 const genarateToken = (user: User): string => {
   const payload = {
-    useId: user.id,
+    userId: user.id, // ✅ fixed key name
     userName: user.username,
     joined_at: user.createdAt,
-    role: user.role,
+    role: user.role, // ✅ this is correct
   };
 
   return jwt.sign(payload, process.env.JWT_SECRET_KEY as string, {
