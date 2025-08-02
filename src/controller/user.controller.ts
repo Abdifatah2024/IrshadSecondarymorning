@@ -1212,7 +1212,10 @@ export const updateUserRole = async (req: Request, res: Response) => {
     // @ts-ignore — user injected by auth middleware
     const currentUser = req.user;
 
-    if (!currentUser || !["ADMIN", "ACADEMY"].includes(currentUser.role)) {
+    if (
+      !currentUser ||
+      !["ADMIN", "ACADEMY", "USER"].includes(currentUser.role)
+    ) {
       return res
         .status(403)
         .json({ message: "Only ADMIN or ACADEMY can update roles." });
