@@ -30,22 +30,16 @@ const app = express();
 // Middleware
 app.use(express.json());
 app.use(cookieParser());
-// app.use(
-//   cors({
-//     origin: [
-//       "http://localhost:5173",
-//       "https://school-backend-system-1.onrender.com",
-//     ],
-//     credentials: true,
-//     methods: ["GET", "POST", "PUT", "DELETE"],
-//   })
-// );
 
-// Fix 1: Add proper port handling
 app.use(
   cors({
-    origin: "http://localhost:5173", // ✅ exact origin only
+    origin: [
+      "http://localhost:5173",
+      "http://148.230.107.131",
+      "http://148.230.107.131:5173",
+    ],
     credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   })
 );
 
