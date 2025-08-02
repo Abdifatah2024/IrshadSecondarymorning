@@ -151,10 +151,8 @@ export const login = async (req: Request, res: Response) => {
       return res.status(401).json({ message: "Incorrect email or password." });
     }
 
-    // Determine current lock duration
-    const unlockAfterMs = user.lockCount === 0 ? 1 * 60 * 1000 : 5 * 60 * 1000; // 1 min or 5 min
+    const unlockAfterMs = user.lockCount === 0 ? 1 * 60 * 1000 : 5 * 60 * 1000;
 
-    // Auto-unlock if enough time has passed
     if (user.isLocked && user.lockedAt) {
       const now = new Date();
       const lockedForMs = now.getTime() - new Date(user.lockedAt).getTime();
@@ -173,7 +171,6 @@ export const login = async (req: Request, res: Response) => {
       }
     }
 
-    // Still locked?
     if (user.isLocked) {
       const remainingTimeMs =
         unlockAfterMs - (Date.now() - new Date(user.lockedAt!).getTime());
@@ -196,7 +193,7 @@ export const login = async (req: Request, res: Response) => {
             failedAttempts: updatedAttempts,
             isLocked: true,
             lockedAt: new Date(),
-            lockCount: user.lockCount + 1, // Increase lock count
+            lockCount: user.lockCount + 1,
           },
         });
 
@@ -220,7 +217,6 @@ export const login = async (req: Request, res: Response) => {
       });
     }
 
-    // ✅ Successful login — reset everything
     await prisma.user.update({
       where: { id: user.id },
       data: {
@@ -238,7 +234,7 @@ export const login = async (req: Request, res: Response) => {
         email: user.email,
         username: user.username,
         fullname: user.fullName,
-        Role: user.role,
+        role: user.role, // ✅ lowercase key
       },
       Access_token: genarateToken(user),
     });
