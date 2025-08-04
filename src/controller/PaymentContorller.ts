@@ -3963,3 +3963,86 @@ export const getStudentsWithBalancesAndDueMonths = async (
     });
   }
 };
+
+export const addTwoDollarToStudentFees = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    // Fetch all active students who are not deleted and have a fee > 0
+    const studentsToUpdate = await prisma.student.findMany({
+      where: {
+        isdeleted: false,
+        fee: {
+          gt: 0, // Skip students with fee 0
+        },
+      },
+      select: {
+        id: true,
+        fee: true,
+      },
+    });
+
+    let updatedCount = 0;
+
+    for (const student of studentsToUpdate) {
+      await prisma.student.update({
+        where: { id: student.id },
+        data: {
+          fee: student.fee + 2, // Add $2 to the current fee
+        },
+      });
+      updatedCount++;
+    }
+
+    res.status(200).json({
+      message: `${updatedCount} students' fees were updated by $2.`,
+    });
+  } catch (error) {
+    console.error("Fee Update Error:", error);
+    res.status(500).json({
+      message: "Failed to update student fees.",
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+};
+
+export const addFiveDollarToNoBusStudents = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const studentsToUpdate = await prisma.student.findMany({
+      where: {
+        isdeleted: false,
+        OR: [{ bus: null }, { bus: "" }],
+      },
+      select: {
+        id: true,
+        fee: true,
+      },
+    });
+
+    let updatedCount = 0;
+
+    for (const student of studentsToUpdate) {
+      await prisma.student.update({
+        where: { id: student.id },
+        data: {
+          fee: student.fee + 5,
+        },
+      });
+      updatedCount++;
+    }
+
+    res.status(200).json({
+      message: `${updatedCount} students without a bus were charged an additional $5.`,
+    });
+  } catch (error) {
+    console.error("Bus Fee Update Error:", error);
+    res.status(500).json({
+      message: "Failed to add $5 to students without bus.",
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+};

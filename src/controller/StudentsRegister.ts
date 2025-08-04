@@ -166,8 +166,10 @@ export const createMultipleStudents = async (req: Request, res: Response) => {
     // @ts-ignore
     const user = req.user;
     const createdStudents = [];
+    const skippedStudents: { row: number; reason: string }[] = [];
 
-    for (const studentData of studentsData) {
+    for (let i = 0; i < studentsData.length; i++) {
+      const studentData = studentsData[i];
       const {
         firstname,
         middlename,
@@ -190,108 +192,138 @@ export const createMultipleStudents = async (req: Request, res: Response) => {
         academicYearId,
       } = studentData;
 
-      // Check for duplicates by phone
-      const existing = await prisma.student.findFirst({ where: { phone } });
-      if (existing) {
-        return res.status(400).json({
-          message: `Phone number ${phone} already exists.`,
+      const rowIndex = i + 2;
+
+      // Basic validation
+      if (
+        !firstname ||
+        !lastname ||
+        !classId ||
+        !phone ||
+        !gender ||
+        !Age ||
+        fee === undefined ||
+        fee === null
+      ) {
+        skippedStudents.push({
+          row: rowIndex,
+          reason:
+            "Missing required fields (firstname, lastname, classId, phone, gender, age, fee)",
         });
+        continue;
       }
 
-      const fullname = `${firstname} ${middlename} ${lastname} ${
+      const phoneStr = String(phone).trim();
+      const phone2Str = phone2 ? String(phone2).trim() : null;
+      const busStr = bus ? String(bus).trim() : null;
+      const fullname = `${firstname} ${middlename || ""} ${lastname} ${
         fourtname || ""
       }`.trim();
       const familyName = ["Reer", middlename, lastname, fourtname]
         .filter(Boolean)
         .join(" ");
-      const username = `${lastname.toLowerCase()}_${phone.slice(-4)}`;
+      const username = `${lastname.toLowerCase()}_${phoneStr.slice(-4)}`;
       const email = `${username}@parent.school.com`;
 
-      // Create or reuse parent
-      let parentUser = await prisma.user.findFirst({
-        where: {
-          phoneNumber: phone,
-          role: "PARENT",
-        },
-      });
-
-      if (!parentUser) {
-        const hashedPassword = await bcryptjs.hash(phone, 10);
-        parentUser = await prisma.user.create({
-          data: {
-            fullName: motherName || `${firstname} ${lastname} Parent`,
-            username,
-            email,
-            phoneNumber: phone,
-            password: hashedPassword,
-            confirmpassword: hashedPassword,
+      try {
+        // ✅ Reuse parent or create a new one
+        let parentUser = await prisma.user.findFirst({
+          where: {
+            phoneNumber: phoneStr,
             role: "PARENT",
           },
         });
+
+        if (!parentUser) {
+          const hashedPassword = await bcryptjs.hash(phoneStr, 10);
+          parentUser = await prisma.user.create({
+            data: {
+              fullName: motherName || `${firstname} ${lastname} Parent`,
+              username,
+              email,
+              phoneNumber: phoneStr,
+              password: hashedPassword,
+              confirmpassword: hashedPassword,
+              role: "PARENT",
+            },
+          });
+        }
+
+        // ✅ Generate unique roll number
+        const studentCount = await prisma.student.count();
+        const year = new Date().getFullYear();
+        const rollNumber = `STU-${year}-${String(studentCount + 1).padStart(
+          4,
+          "0"
+        )}`;
+
+        // ✅ Create student and linked records
+        const newStudent = await prisma.$transaction(async (tx) => {
+          const student = await tx.student.create({
+            data: {
+              firstname,
+              middlename,
+              lastname,
+              fourtname,
+              fullname,
+              familyName,
+              classId: Number(classId),
+              phone: phoneStr,
+              phone2: phone2Str,
+              bus: busStr,
+              address,
+              previousSchool,
+              previousSchoolType: previousSchoolType || "NOT_SPECIFIC",
+              motherName,
+              gender,
+              Age: Number(Age),
+              fee: Number(fee),
+              district,
+              transfer: Boolean(transfer),
+              parentEmail,
+              rollNumber,
+              academicYearId: academicYearId || 1,
+              registeredById: user.useId,
+              userid: user.useId,
+              parentUserId: parentUser.id,
+            },
+          });
+
+          const today = new Date();
+          await tx.studentFee.create({
+            data: {
+              studentId: student.id,
+              month: today.getMonth() + 1,
+              year: today.getFullYear(),
+              isPaid: false,
+            },
+          });
+
+          await tx.studentAccount.create({
+            data: {
+              studentId: student.id,
+              carryForward: 0,
+            },
+          });
+
+          return student;
+        });
+
+        createdStudents.push(newStudent);
+      } catch (err) {
+        console.error(`Row ${rowIndex} Error:`, err);
+        skippedStudents.push({
+          row: rowIndex,
+          reason: "Error while creating student record",
+        });
       }
-
-      // Generate roll number like STU-2025-0005
-      const studentCount = await prisma.student.count();
-      const year = new Date().getFullYear();
-      const rollNumber = `STU-${year}-${String(studentCount + 1).padStart(
-        4,
-        "0"
-      )}`;
-
-      // Create student + related data
-      const newStudent = await prisma.student.create({
-        data: {
-          firstname,
-          middlename,
-          lastname,
-          fourtname,
-          fullname,
-          familyName,
-          classId: Number(classId),
-          phone,
-          phone2,
-          bus,
-          address,
-          previousSchool,
-          previousSchoolType: previousSchoolType || "NOT_SPECIFIC",
-          motherName,
-          gender,
-          Age: Number(Age),
-          fee: Number(fee),
-          district,
-          transfer: Boolean(transfer),
-          parentEmail,
-          rollNumber,
-          academicYearId: academicYearId || 1,
-          registeredById: user.useId,
-          userid: user.useId,
-          parentUserId: parentUser.id,
-        },
-      });
-
-      const today = new Date();
-      await prisma.studentFee.create({
-        data: {
-          studentId: newStudent.id,
-          month: today.getMonth() + 1,
-          year: today.getFullYear(),
-          isPaid: false,
-        },
-      });
-
-      await prisma.studentAccount.create({
-        data: {
-          studentId: newStudent.id,
-          carryForward: 0,
-        },
-      });
-
-      createdStudents.push(newStudent);
     }
 
     res.status(201).json({
-      message: "Students created successfully with parent and fee records",
-      students: createdStudents,
+      message: `${createdStudents.length} students created successfully.`,
+      created: createdStudents.length,
+      skipped: skippedStudents.length,
+      skippedDetails: skippedStudents,
     });
   } catch (error) {
     console.error("Error creating multiple students:", error);
@@ -354,6 +386,7 @@ export const createMultipleStudentsByExcel = async (
 
       const rowIndex = i + 2;
 
+      // ✅ Validate required fields
       if (
         !firstname ||
         !lastname ||
@@ -385,17 +418,7 @@ export const createMultipleStudentsByExcel = async (
       const email = `${username}@parent.school.com`;
 
       try {
-        const existingStudent = await prisma.student.findFirst({
-          where: { phone: phoneStr },
-        });
-        if (existingStudent) {
-          skippedStudents.push({
-            row: rowIndex,
-            reason: "Duplicate phone number",
-          });
-          continue;
-        }
-
+        // ✅ Check or create parent
         let parentUser = await prisma.user.findFirst({
           where: { phoneNumber: phoneStr, role: "PARENT" },
         });
@@ -415,6 +438,7 @@ export const createMultipleStudentsByExcel = async (
           });
         }
 
+        // ✅ Generate unique roll number
         const count = await prisma.student.count();
         const currentYear = new Date().getFullYear();
         const rollNumber = `STU-${currentYear}-${String(count + 1).padStart(
@@ -422,6 +446,7 @@ export const createMultipleStudentsByExcel = async (
           "0"
         )}`;
 
+        // ✅ Create student and related data
         const student = await prisma.$transaction(async (tx) => {
           const newStudent = await tx.student.create({
             data: {
@@ -1687,7 +1712,6 @@ export const deleteAttendance = async (req: Request, res: Response) => {
   }
 };
 
-// Permanently delete multiple students by ID range
 export const deleteMultipleStudentsPermanently = async (
   req: Request,
   res: Response
@@ -1701,23 +1725,52 @@ export const deleteMultipleStudentsPermanently = async (
       });
     }
 
-    const deleted = await prisma.student.deleteMany({
+    const studentIds = await prisma.student.findMany({
       where: {
         id: {
           gte: Number(startId),
           lte: Number(endId),
         },
       },
+      select: { id: true },
+    });
+
+    const ids = studentIds.map((s) => s.id);
+
+    // Delete relations in order to prevent FK constraint errors
+    await prisma.studentFee.deleteMany({
+      where: { studentId: { in: ids } },
+    });
+
+    await prisma.studentAccount.deleteMany({
+      where: { studentId: { in: ids } },
+    });
+
+    await prisma.examScore.deleteMany({
+      where: { studentId: { in: ids } },
+    });
+
+    await prisma.attendance.deleteMany({
+      where: { studentId: { in: ids } },
+    });
+
+    // Add any additional related deletions here, e.g. discipline, reports...
+
+    const deleted = await prisma.student.deleteMany({
+      where: {
+        id: { in: ids },
+      },
     });
 
     res.status(200).json({
-      message: `Students from ID ${startId} to ${endId} permanently deleted.`,
+      message: `Deleted ${deleted.count} students (with all related data).`,
       count: deleted.count,
     });
   } catch (error) {
     console.error("Error permanently deleting students:", error);
     res.status(500).json({
       message: "Server error while permanently deleting students",
+      error: error instanceof Error ? error.message : String(error),
     });
   }
 };

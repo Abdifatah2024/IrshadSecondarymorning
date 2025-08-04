@@ -32,6 +32,8 @@ import {
   getUserPaymentCollections,
   getAllPaymentsByStudentId,
   getStudentsWithBalancesAndDueMonths,
+  addTwoDollarToStudentFees,
+  addFiveDollarToNoBusStudents,
 } from "../controller/PaymentContorller";
 import { authenticate } from "../middlewares/authaniticator";
 
@@ -77,5 +79,9 @@ router.post("/payment/student", authenticate, payFullForMonthByStudent);
 router.get("/payments/collection-summary", getUserPaymentCollections);
 router.post("/payments/by-student", getAllPaymentsByStudentId);
 router.get("/GetStudent/Balance/Month", getStudentsWithBalancesAndDueMonths);
+// In your Express router file
+router.post("/student/update-fees", addTwoDollarToStudentFees);
+// Add this to your Express router
+router.post("/student/add-busless-fee", addFiveDollarToNoBusStudents);
 
 export default router;
