@@ -2265,9 +2265,10 @@ export const getLastStudentByParentPhone = async (
 
 export { upload };
 
+// controller/studentController.ts
+
 export const getStudentsWithBus = async (req: Request, res: Response) => {
   try {
-    // You can change this to whatever your actual standard school fee is
     const standardSchoolFee = 17;
 
     const students = await prisma.student.findMany({
@@ -2295,15 +2296,15 @@ export const getStudentsWithBus = async (req: Request, res: Response) => {
     const enrichedStudents = students.map((student) => {
       const totalFee = Number(student.fee) || 0;
 
-      const dynamicSchoolFee =
-        totalFee < standardSchoolFee ? totalFee : standardSchoolFee;
-
-      const busFee = totalFee - dynamicSchoolFee;
+      const schoolFee =
+        totalFee >= standardSchoolFee ? standardSchoolFee : totalFee;
+      const busFee =
+        totalFee > standardSchoolFee ? totalFee - standardSchoolFee : 0;
 
       return {
         ...student,
         totalFee,
-        schoolFee: dynamicSchoolFee,
+        schoolFee,
         busFee,
       };
     });
