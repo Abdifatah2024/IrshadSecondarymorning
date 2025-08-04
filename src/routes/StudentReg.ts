@@ -55,6 +55,7 @@ import {
   listDeletedStudents,
   restoreDeletedStudent,
   listRestoredStudents,
+  getAllClasses,
 } from "../controller/StudentsRegister";
 
 import { getYearlyProgressReportByStudent } from "../controller/exam.controller";
@@ -158,5 +159,6 @@ router.get(
   getClassMonthlyAttendanceSummary
 );
 router.get("/Soft/deleted", authenticate, listDeletedStudents);
+router.get("/Class", getAllClasses); // GET /api/classes
 
 export default router;

@@ -3210,3 +3210,22 @@ export const listRestoredStudents = async (_req: Request, res: Response) => {
     });
   }
 };
+
+export const getAllClasses = async (_req: Request, res: Response) => {
+  try {
+    const classes = await prisma.classes.findMany({
+      select: {
+        id: true,
+        name: true,
+      },
+      orderBy: {
+        name: "asc",
+      },
+    });
+
+    return res.status(200).json({ classes });
+  } catch (error) {
+    console.error("Error fetching classes:", error);
+    return res.status(500).json({ message: "Failed to fetch classes" });
+  }
+};
