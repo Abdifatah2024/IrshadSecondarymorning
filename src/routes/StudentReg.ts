@@ -63,6 +63,7 @@ import { getYearlyProgressReportByStudent } from "../controller/exam.controller"
 const router = Router();
 
 /* ----------------------------- Student CRUD ----------------------------- */
+router.get("/Class", getAllClasses); // GET /api/classes
 router.put("/restore", authenticate, restoreDeletedStudent);
 router.get("/students/restored", authenticate, listRestoredStudents);
 router.post("/create", authenticate, createStudent);
@@ -159,6 +160,5 @@ router.get(
   getClassMonthlyAttendanceSummary
 );
 router.get("/Soft/deleted", authenticate, listDeletedStudents);
-router.get("/Class", getAllClasses); // GET /api/classes
 
 export default router;
