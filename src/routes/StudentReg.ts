@@ -56,6 +56,7 @@ import {
   restoreDeletedStudent,
   listRestoredStudents,
   getAllClasses,
+  getClassWiseStudentSummary,
 } from "../controller/StudentsRegister";
 
 import { getYearlyProgressReportByStudent } from "../controller/exam.controller";
@@ -90,6 +91,7 @@ router.get("/classListStd", getClasses);
 router.get("/ClassList/:classId", getStudentsByClass);
 
 /* ----------------------------- Student List ----------------------------- */
+router.get("/class-summary", getClassWiseStudentSummary);
 router.get("/studentList", getStudents);
 
 /* ----------------------------- Attendance Routes ----------------------------- */

@@ -3231,3 +3231,58 @@ export const getAllClasses = async (_req: Request, res: Response) => {
     return res.status(500).json({ message: "Failed to fetch classes" });
   }
 };
+
+export const getClassWiseStudentSummary = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const classes = await prisma.classes.findMany({
+      include: {
+        Student: {
+          where: { isdeleted: false },
+          select: {
+            gender: true,
+            fee: true,
+          },
+        },
+      },
+      orderBy: {
+        name: "asc",
+      },
+    });
+
+    const result = classes.map((cls) => {
+      const students = cls.Student;
+      const totalStudents = students.length;
+      const totalMale = students.filter(
+        (s) => s.gender?.toLowerCase() === "male"
+      ).length;
+      const totalFemale = students.filter(
+        (s) => s.gender?.toLowerCase() === "female"
+      ).length;
+      const totalRegisteredFeeAmount = students.reduce(
+        (sum, s) => sum + (s.fee || 0),
+        0
+      );
+      const freeStudentsCount = students.filter(
+        (s) => (s.fee ?? 0) === 0
+      ).length;
+
+      return {
+        classId: cls.id,
+        className: cls.name,
+        totalStudents,
+        totalMale,
+        totalFemale,
+        totalRegisteredFeeAmount,
+        freeStudentsCount,
+      };
+    });
+
+    res.status(200).json({ classes: result });
+  } catch (error) {
+    console.error("Error in getClassWiseStudentSummary:", error);
+    res.status(500).json({ message: "Server error", error });
+  }
+};
