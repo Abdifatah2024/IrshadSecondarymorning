@@ -2267,7 +2267,7 @@ export { upload };
 
 export const getStudentsWithBus = async (req: Request, res: Response) => {
   try {
-    const standardSchoolFee = 28;
+    const standardSchoolFee = 17;
 
     const students = await prisma.student.findMany({
       where: {
