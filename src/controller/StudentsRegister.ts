@@ -2330,7 +2330,7 @@ export const getBusStudentsWithZeroBusFee = async (
   res: Response
 ) => {
   try {
-    const standardSchoolFee = 28;
+    const standardSchoolFee = 17;
 
     const students = await prisma.student.findMany({
       where: {
@@ -2387,7 +2387,7 @@ export const getBusStudentsWithZeroBusFee = async (
 
 export const getStudentsWithoutBus = async (req: Request, res: Response) => {
   try {
-    const schoolFee = 28;
+    const schoolFee = 17;
 
     const students = await prisma.student.findMany({
       where: {
