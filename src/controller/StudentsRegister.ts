@@ -1746,7 +1746,7 @@ export const deleteMultipleStudentsPermanently = async (
       where: { studentId: { in: ids } },
     });
 
-    await prisma.examScore.deleteMany({
+    await prisma.score.deleteMany({
       where: { studentId: { in: ids } },
     });
 
