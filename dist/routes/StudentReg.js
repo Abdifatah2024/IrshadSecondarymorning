@@ -77,4 +77,5 @@ router.get("/reports/class-attendance-summary", StudentsRegister_1.getClassAtten
 router.get("/reports/daily-attendance-overview", StudentsRegister_1.getDailyAttendanceOverview);
 router.get("/class-monthly-attendance-summary/:classId", StudentsRegister_1.getClassMonthlyAttendanceSummary);
 router.get("/Soft/deleted", authaniticator_1.authenticate, StudentsRegister_1.listDeletedStudents);
+router.get("/Class", StudentsRegister_1.getAllClasses); // GET /api/classes
 exports.default = router;

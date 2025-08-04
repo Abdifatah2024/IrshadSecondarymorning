@@ -46,6 +46,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.listRestoredStudents = exports.restoreDeletedStudent = exports.listDeletedStudents = exports.softDeleteStudent = exports.getClassMonthlyAttendanceSummary = exports.getDailyAttendanceOverview = exports.getClassAttendanceSummary = exports.updateAttendanceCallInfoHandler = exports.absentReport = exports.listUntransferredStudents = exports.updateStudentTransferAndRollNumber = exports.getStudentsWithoutBus = exports.getBusStudentsWithZeroBusFee = exports.getStudentsWithBus = exports.upload = exports.getLastStudentByParentPhone = exports.getStudentsWithSameBus = exports.updateStudentParent = exports.getParentStudentAttendance = exports.getStudentsByFamilyNameWritten = exports.getBrothersList = exports.getTodayAbsentStudents = exports.getStudents = exports.getRegisteredStudentsForDevice = exports.deleteStudentAndRelations = exports.deleteMultipleStudentsPermanently = exports.deleteAttendance = exports.updateAttendance = exports.getAllAbsenteesByDate = exports.getAttendance = exports.markAbsenteesBulk = exports.getAbsentStudentsByDate = exports.updateStudentAttendance = exports.getTopAbsentStudents = exports.markViaFingerprint = exports.markAttendance = exports.getStudentsByClass = exports.getClasses = exports.createclass = exports.deletepermitly = exports.backFromSoftDelete = exports.listSoftDeletedStudents = exports.deleteStudent = exports.updateStudentClass = exports.updateStudent = exports.getStudentByIdOrName = exports.getStudentById = exports.createMultipleStudentsByExcel = exports.createMultipleStudents = exports.createStudent = void 0;
+exports.getAllClasses = void 0;
 const client_1 = require("@prisma/client");
 const sendTwilioMessage_1 = require("./sendTwilioMessage"); // make sure path is correct
 const prisma = new client_1.PrismaClient();
@@ -2766,3 +2767,22 @@ const listRestoredStudents = (_req, res) => __awaiter(void 0, void 0, void 0, fu
     }
 });
 exports.listRestoredStudents = listRestoredStudents;
+const getAllClasses = (_req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const classes = yield prisma.classes.findMany({
+            select: {
+                id: true,
+                name: true,
+            },
+            orderBy: {
+                name: "asc",
+            },
+        });
+        return res.status(200).json({ classes });
+    }
+    catch (error) {
+        console.error("Error fetching classes:", error);
+        return res.status(500).json({ message: "Failed to fetch classes" });
+    }
+});
+exports.getAllClasses = getAllClasses;
