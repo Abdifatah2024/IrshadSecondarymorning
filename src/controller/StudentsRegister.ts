@@ -301,6 +301,7 @@ export const createMultipleStudents = async (req: Request, res: Response) => {
     });
   }
 };
+
 export const createMultipleStudentsByExcel = async (
   req: Request,
   res: Response
@@ -360,7 +361,8 @@ export const createMultipleStudentsByExcel = async (
         !phone ||
         !gender ||
         !Age ||
-        !fee
+        fee === undefined ||
+        fee === null
       ) {
         skippedStudents.push({
           row: rowIndex,
@@ -413,7 +415,6 @@ export const createMultipleStudentsByExcel = async (
           });
         }
 
-        // Generate roll number
         const count = await prisma.student.count();
         const currentYear = new Date().getFullYear();
         const rollNumber = `STU-${currentYear}-${String(count + 1).padStart(
@@ -421,7 +422,6 @@ export const createMultipleStudentsByExcel = async (
           "0"
         )}`;
 
-        // Create in transaction
         const student = await prisma.$transaction(async (tx) => {
           const newStudent = await tx.student.create({
             data: {
