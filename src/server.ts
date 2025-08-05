@@ -37,6 +37,8 @@ app.use(
       "http://localhost:5173",
       "http://148.230.107.131",
       "http://148.230.107.131:5173",
+      "http://horyaalhrg.com", // ✅ added
+      "https://horyaalhrg.com", // ✅ in case you're using HTTPS
     ],
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
