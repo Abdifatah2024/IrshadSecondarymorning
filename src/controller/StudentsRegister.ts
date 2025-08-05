@@ -3339,3 +3339,98 @@ export const getClassWiseStudentSummary = async (
     res.status(500).json({ message: "Server error", error });
   }
 };
+
+/**
+ * Standardize all student gender values
+ * Converts 'male' → 'Male', 'FEMALE' → 'Female', etc.
+ */
+export const standardizeStudentGender = async (req: Request, res: Response) => {
+  try {
+    const students = await prisma.student.findMany({
+      where: {
+        gender: {
+          not: null,
+        },
+      },
+      select: {
+        id: true,
+        gender: true,
+      },
+    });
+
+    let updatedCount = 0;
+
+    for (const student of students) {
+      const gender = student.gender?.toLowerCase();
+      let standardizedGender: string | null = null;
+
+      if (gender === "male") {
+        standardizedGender = "Male";
+      } else if (gender === "female") {
+        standardizedGender = "Female";
+      }
+
+      if (standardizedGender && student.gender !== standardizedGender) {
+        await prisma.student.update({
+          where: { id: student.id },
+          data: { gender: standardizedGender },
+        });
+        updatedCount++;
+      }
+    }
+
+    return res.status(200).json({
+      message: `✅ Gender values standardized for ${updatedCount} students.`,
+    });
+  } catch (error) {
+    console.error("❌ Error standardizing gender:", error);
+    return res.status(500).json({
+      message: "Server error while standardizing gender values.",
+    });
+  }
+};
+
+/**
+ * Get all free students (fee = 0) who are active and not deleted
+ */
+export const getFreeStudents = async (req: Request, res: Response) => {
+  try {
+    const students = await prisma.student.findMany({
+      where: {
+        fee: 0,
+        isdeleted: false,
+      },
+      select: {
+        id: true,
+        fullname: true,
+        phone: true,
+        classes: {
+          select: {
+            name: true,
+          },
+        },
+        registeredBy: {
+          select: {
+            id: true,
+            fullName: true,
+            email: true,
+          },
+        },
+      },
+      orderBy: {
+        fullname: "asc",
+      },
+    });
+
+    return res.status(200).json({
+      message: "✅ Free students fetched successfully.",
+      total: students.length,
+      students,
+    });
+  } catch (error) {
+    console.error("❌ Error fetching free students:", error);
+    return res.status(500).json({
+      message: "Server error while fetching free students.",
+    });
+  }
+};

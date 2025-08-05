@@ -57,6 +57,8 @@ import {
   listRestoredStudents,
   getAllClasses,
   getClassWiseStudentSummary,
+  standardizeStudentGender,
+  getFreeStudents,
 } from "../controller/StudentsRegister";
 
 import { getYearlyProgressReportByStudent } from "../controller/exam.controller";
@@ -64,6 +66,8 @@ import { getYearlyProgressReportByStudent } from "../controller/exam.controller"
 const router = Router();
 
 /* ----------------------------- Student CRUD ----------------------------- */
+router.put("/standardize-gender", standardizeStudentGender);
+router.get("/free-students", getFreeStudents);
 router.get("/Class", getAllClasses); // GET /api/classes
 router.put("/restore", authenticate, restoreDeletedStudent);
 router.get("/students/restored", authenticate, listRestoredStudents);
