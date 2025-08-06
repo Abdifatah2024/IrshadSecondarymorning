@@ -3066,6 +3066,85 @@ export const getAllPayments = async (_req: Request, res: Response) => {
   }
 };
 
+// export const updatePayment = async (req: Request, res: Response) => {
+//   const paymentId = parseInt(req.params.id);
+//   const { amountPaid, discount, Description } = req.body;
+
+//   if (isNaN(paymentId)) {
+//     return res.status(400).json({ message: "Invalid payment ID" });
+//   }
+
+//   try {
+//     const totalAmount = Number(amountPaid) + Number(discount);
+
+//     // Get original payment with student
+//     const payment = await prisma.payment.findUnique({
+//       where: { id: paymentId },
+//       include: {
+//         student: true,
+//         allocations: {
+//           include: { studentFee: true },
+//         },
+//       },
+//     });
+
+//     if (!payment) {
+//       return res.status(404).json({ message: "Payment not found" });
+//     }
+
+//     const updatedPayment = await prisma.payment.update({
+//       where: { id: paymentId },
+//       data: {
+//         amountPaid: Number(amountPaid),
+//         discount: Number(discount),
+//         Description: Description ?? "",
+//       },
+//     });
+
+//     // ✅ Update allocations if needed
+//     const allocations = payment.allocations;
+//     if (allocations.length > 0) {
+//       const newAmount = totalAmount / allocations.length;
+
+//       await Promise.all(
+//         allocations.map((alloc) =>
+//           prisma.paymentAllocation.update({
+//             where: { id: alloc.id },
+//             data: { amount: newAmount },
+//           })
+//         )
+//       );
+//     }
+
+//     // ✅ Update related DiscountLog (only for current month/year)
+//     const now = new Date();
+//     const currentMonth = now.getMonth() + 1;
+//     const currentYear = now.getFullYear();
+
+//     await prisma.discountLog.updateMany({
+//       where: {
+//         studentId: payment.studentId,
+//         month: currentMonth,
+//         year: currentYear,
+//       },
+//       data: {
+//         amount: Number(discount),
+//         reason: Description ?? "Updated with payment",
+//         verified: true,
+//         verifiedAt: new Date(),
+//         verifiedBy: "System",
+//       },
+//     });
+
+//     return res.status(200).json({
+//       message: "Payment, allocations, and discount log updated successfully",
+//       updatedPayment,
+//     });
+//   } catch (error) {
+//     console.error("Error updating payment:", error);
+//     return res.status(500).json({ message: "Failed to update payment" });
+//   }
+// };
 export const updatePayment = async (req: Request, res: Response) => {
   const paymentId = parseInt(req.params.id);
   const { amountPaid, discount, Description } = req.body;
@@ -3077,21 +3156,18 @@ export const updatePayment = async (req: Request, res: Response) => {
   try {
     const totalAmount = Number(amountPaid) + Number(discount);
 
-    // Get original payment with student
+    // Step 1: Get original payment with student info
     const payment = await prisma.payment.findUnique({
       where: { id: paymentId },
-      include: {
-        student: true,
-        allocations: {
-          include: { studentFee: true },
-        },
-      },
     });
 
     if (!payment) {
       return res.status(404).json({ message: "Payment not found" });
     }
 
+    const studentId = payment.studentId;
+
+    // Step 2: Update the payment record
     const updatedPayment = await prisma.payment.update({
       where: { id: paymentId },
       data: {
@@ -3101,29 +3177,57 @@ export const updatePayment = async (req: Request, res: Response) => {
       },
     });
 
-    // ✅ Update allocations if needed
-    const allocations = payment.allocations;
-    if (allocations.length > 0) {
-      const newAmount = totalAmount / allocations.length;
+    // Step 3: Delete old allocations
+    await prisma.paymentAllocation.deleteMany({
+      where: { paymentId },
+    });
 
-      await Promise.all(
-        allocations.map((alloc) =>
-          prisma.paymentAllocation.update({
-            where: { id: alloc.id },
-            data: { amount: newAmount },
-          })
-        )
-      );
+    // Step 4: Reset all student fees (to make allocation accurate)
+    await prisma.studentFee.updateMany({
+      where: { studentId },
+      data: { isPaid: false },
+    });
+
+    // Step 5: Allocate new payment to unpaid fees in order
+    let remaining = totalAmount;
+
+    const fees = await prisma.studentFee.findMany({
+      where: { studentId },
+      orderBy: [{ year: "asc" }, { month: "asc" }],
+    });
+
+    for (const fee of fees) {
+      if (remaining <= 0) break;
+
+      const due = Number(fee.student_fee);
+      const toAllocate = Math.min(remaining, due);
+
+      await prisma.paymentAllocation.create({
+        data: {
+          paymentId,
+          studentFeeId: fee.id,
+          amount: toAllocate,
+        },
+      });
+
+      await prisma.studentFee.update({
+        where: { id: fee.id },
+        data: {
+          isPaid: toAllocate === due,
+        },
+      });
+
+      remaining -= toAllocate;
     }
 
-    // ✅ Update related DiscountLog (only for current month/year)
+    // Step 6: Update discount log for current month
     const now = new Date();
     const currentMonth = now.getMonth() + 1;
     const currentYear = now.getFullYear();
 
     await prisma.discountLog.updateMany({
       where: {
-        studentId: payment.studentId,
+        studentId,
         month: currentMonth,
         year: currentYear,
       },
@@ -3137,7 +3241,7 @@ export const updatePayment = async (req: Request, res: Response) => {
     });
 
     return res.status(200).json({
-      message: "Payment, allocations, and discount log updated successfully",
+      message: "Payment updated and balance recalculated",
       updatedPayment,
     });
   } catch (error) {
