@@ -38,6 +38,7 @@ import {
   updateAnnouncement,
   deleteAnnouncement,
   refreshAccessToken,
+  createMultipleEmployeesByExcel,
   // refreshAccessToken,
 } from "../controller/user.controller";
 
@@ -45,6 +46,7 @@ import {
   sendResetCode,
   verifyResetCodeAndChangePassword,
 } from "../controller/authController";
+import uploadExcel from "../config/multerExcel";
 
 const router = Router();
 
@@ -81,6 +83,13 @@ router.post("/:userId/photo", upload.single("photo"), uploadPhoto);
 
 /* ---------------------------- Employee ---------------------------- */
 router.post("/employees", authenticate, createEmployee);
+router.post(
+  "/upload-employees",
+  authenticate,
+  uploadExcel.single("file"),
+  createMultipleEmployeesByExcel
+);
+
 router.get("/employees", getAllEmployees);
 router.get("/employees/:id", getEmployeeById);
 router.put("/employees/:id", updateEmployee);

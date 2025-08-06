@@ -10,7 +10,10 @@ import { channel } from "diagnostics_channel";
 import { v4 as uuidv4 } from "uuid";
 import path from "path";
 import multer from "multer";
+import * as XLSX from "xlsx";
+import fs from "fs";
 import validator from "validator";
+
 import { sendResetEmail } from "../controller/sendResetEmail";
 // ─────────────────────────────────────────────────────
 // Prisma Client
@@ -248,61 +251,6 @@ export const login = async (req: Request, res: Response) => {
   }
 };
 
-// export const login = async (req: Request, res: Response) => {
-//   try {
-//     const { password, email } = req.body;
-
-//     if (!password || !email) {
-//       return res
-//         .status(400)
-//         .json({ message: "Email and password are required." });
-//     }
-
-//     const user = await prisma.user.findFirst({
-//       where: { email: email.toLowerCase() },
-//     });
-
-//     if (!user) {
-//       return res.status(401).json({ message: "Incorrect email or password." });
-//     }
-
-//     const isPasswordValid = bcryptjs.compareSync(password, user.password);
-//     if (!isPasswordValid) {
-//       return res.status(401).json({ message: "Incorrect password." });
-//     }
-
-//     // ✅ Generate tokens
-//     const accessToken = genarateToken(user);
-//     const refreshToken = generateRefreshToken(user);
-
-//     // ✅ Set refresh token in cookie
-//     res.cookie("refreshToken", refreshToken, {
-//       httpOnly: true,
-//       secure: process.env.NODE_ENV === "production",
-//       sameSite: "strict",
-//       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-//     });
-
-//     return res.status(200).json({
-//       message: "Successfully logged in!",
-//       user: {
-//         id: user.id,
-//         email: user.email,
-//         username: user.username,
-//         fullname: user.fullName,
-//         Role: user.role,
-//       },
-//       Access_Token: accessToken,
-//     });
-//   } catch (error) {
-//     console.error("Login error:", error);
-//     return res.status(500).json({ message: "Login failed. Please try again." });
-//   }
-// };
-
-// ─────────────────────────────────────────────────────
-// Change Password
-// ─────────────────────────────────────────────────────
 export const changePassword = async (req: Request, res: Response) => {
   try {
     const { userId, oldPassword, newPassword } = req.body;
@@ -854,6 +802,150 @@ export const createEmployee = async (req: Request, res: Response) => {
   } catch (error) {
     console.error("Create employee error:", error);
     return res.status(500).json({ message: "Something went wrong" });
+  }
+};
+
+export const createMultipleEmployeesByExcel = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    // @ts-ignore
+    const user = req.user;
+
+    if (!user) {
+      return res.status(401).json({ message: "Unauthorized user" });
+    }
+
+    if (!req.file || !req.file.path) {
+      return res.status(400).json({ message: "No Excel file uploaded." });
+    }
+
+    const filePath = path.resolve(req.file.path);
+    const workbook = XLSX.readFile(filePath);
+
+    if (!workbook.SheetNames || workbook.SheetNames.length === 0) {
+      return res
+        .status(400)
+        .json({ message: "Uploaded Excel file has no sheets" });
+    }
+
+    const sheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[sheetName];
+    const employeeData = XLSX.utils.sheet_to_json(worksheet);
+
+    // Optional: Log header keys
+    if (employeeData.length > 0) {
+      const firstRow = employeeData[0] as Record<string, any>;
+      console.log("Excel Header Keys:", Object.keys(firstRow));
+    }
+
+    const createdEmployees = [];
+    const skippedEmployees: { row: number; reason: string }[] = [];
+
+    for (let i = 0; i < employeeData.length; i++) {
+      const row = employeeData[i] as any;
+
+      const fullName = row["Full Name"];
+      const email = row["Email"];
+      const phone = row["Phone"];
+      const gender = row["Gender"];
+      const nationalId = row["National ID"]; // optional
+      const address = row["Address"];
+      const jobTitle = row["Job Title"];
+      const education = row["Education"];
+      const bankAccount = row["Bank Account"];
+      const salary = row["Salary"];
+      const dateOfHire = row["Date of Hire"] || new Date(); // default to today if missing
+      const dateOfBirth = row["Date of Birth"] || "2000-01-01"; // optional
+
+      // Required fields check
+      if (
+        !fullName ||
+        !email ||
+        !phone ||
+        !gender ||
+        !address ||
+        !jobTitle ||
+        !education ||
+        !bankAccount ||
+        !salary
+      ) {
+        skippedEmployees.push({
+          row: i + 2,
+          reason: "Missing required fields",
+        });
+        continue;
+      }
+
+      const normalizedEmail = String(email).trim().toLowerCase();
+      const normalizedNationalId = nationalId
+        ? String(nationalId).trim().toUpperCase()
+        : "NID" + phone;
+      const formattedPhone = String(phone).trim();
+
+      if (!validator.isEmail(normalizedEmail)) {
+        skippedEmployees.push({ row: i + 2, reason: "Invalid email format" });
+        continue;
+      }
+
+      if (isNaN(salary) || Number(salary) <= 0) {
+        skippedEmployees.push({ row: i + 2, reason: "Invalid salary" });
+        continue;
+      }
+
+      const existing = await prisma.employee.findFirst({
+        where: {
+          OR: [
+            { nationalId: normalizedNationalId },
+            { email: normalizedEmail },
+            { phone: formattedPhone },
+          ],
+        },
+      });
+
+      if (existing) {
+        skippedEmployees.push({ row: i + 2, reason: "Duplicate employee" });
+        continue;
+      }
+
+      const employee = await prisma.employee.create({
+        data: {
+          fullName,
+          email: normalizedEmail,
+          phone: formattedPhone,
+          gender,
+          nationalId: normalizedNationalId,
+          address,
+          jobTitle,
+          dateOfBirth: new Date(dateOfBirth),
+          dateOfHire: new Date(dateOfHire),
+          education,
+          bankAccount,
+          salary: parseFloat(salary),
+          createdBy: {
+            connect: { id: user.useId },
+          },
+        },
+      });
+
+      createdEmployees.push(employee);
+    }
+
+    // Delete Excel file after processing
+    fs.unlinkSync(filePath);
+
+    return res.status(201).json({
+      message: `${createdEmployees.length} employees created successfully.`,
+      created: createdEmployees.length,
+      skipped: skippedEmployees.length,
+      skippedDetails: skippedEmployees,
+    });
+  } catch (error) {
+    console.error("Excel employee upload error:", error);
+    return res
+      .status(500)
+      .json({ message: "Server error while uploading employees" });
   }
 };
 
