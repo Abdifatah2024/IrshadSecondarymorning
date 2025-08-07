@@ -4155,3 +4155,205 @@ export const addFiveDollarToNoBusStudents = async (
     });
   }
 };
+
+// controller/familyController.ts
+
+// controller/familyController.ts
+// controller/familyController.ts
+
+// export const getUnpaidFamiliesWithStudentBalances = async (
+//   _req: Request,
+//   res: Response
+// ) => {
+//   try {
+//     const students = await prisma.student.findMany({
+//       where: {
+//         isdeleted: false,
+//         status: "ACTIVE",
+//         StudentFee: {
+//           some: { isPaid: false },
+//         },
+//       },
+//       include: {
+//         classes: { select: { name: true } },
+//         StudentFee: {
+//           where: { isPaid: false },
+//           include: {
+//             PaymentAllocation: { select: { amount: true } },
+//           },
+//           orderBy: [{ year: "asc" }, { month: "asc" }],
+//         },
+//         StudentAccount: true,
+//       },
+//     });
+
+//     const familyMap = new Map<
+//       string,
+//       {
+//         familyName: string;
+//         phones: Set<string>;
+//         totalBalance: number;
+//         students: {
+//           studentId: number;
+//           fullname: string;
+//           className: string;
+//           balance: number;
+//           monthsDue: { month: number; year: number; due: number }[];
+//         }[];
+//       }
+//     >();
+
+//     for (const student of students) {
+//       const monthlyFee = Number(student.fee);
+//       let totalBalance = 0;
+//       const monthsDue: { month: number; year: number; due: number }[] = [];
+
+//       for (const fee of student.StudentFee) {
+//         const totalPaid = fee.PaymentAllocation.reduce(
+//           (sum, alloc) => sum + Number(alloc.amount),
+//           0
+//         );
+
+//         const due = Math.max(0, monthlyFee - totalPaid);
+//         if (due > 0) {
+//           monthsDue.push({ month: fee.month, year: fee.year, due });
+//           totalBalance += due;
+//         }
+//       }
+
+//       const carryForward = Number(student.StudentAccount?.carryForward || 0);
+//       const finalBalance = Math.max(0, totalBalance - carryForward);
+//       if (finalBalance === 0) continue;
+
+//       const familyName = student.familyName || "Unknown Family";
+//       const phones = [student.phone, student.phone2].filter(Boolean);
+
+//       if (!familyMap.has(familyName)) {
+//         familyMap.set(familyName, {
+//           familyName,
+//           phones: new Set<string>(),
+//           totalBalance: 0,
+//           students: [],
+//         });
+//       }
+
+//       const family = familyMap.get(familyName)!;
+//       phones.forEach((p) => family.phones.add(p!));
+//       family.totalBalance += finalBalance;
+
+//       family.students.push({
+//         studentId: student.id,
+//         fullname: student.fullname,
+//         className: student.classes?.name || "N/A",
+//         balance: finalBalance,
+//         monthsDue,
+//       });
+//     }
+
+//     const families = Array.from(familyMap.values()).map((f) => ({
+//       familyName: f.familyName,
+//       phones: Array.from(f.phones),
+//       totalBalance: f.totalBalance,
+//       students: f.students,
+//     }));
+
+//     res.status(200).json({
+//       count: families.length,
+//       families,
+//     });
+//   } catch (error) {
+//     console.error("Error fetching unpaid families with balances:", error);
+//     res.status(500).json({
+//       message: "Internal server error",
+//     });
+//   }
+// };
+
+// controller/fee/getUnpaidFamiliesGroupedByParent.ts
+
+export const getUnpaidFamiliesGroupedByParent = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const students = await prisma.student.findMany({
+      where: {
+        isdeleted: false,
+        StudentFee: {
+          some: { isPaid: false },
+        },
+      },
+      include: {
+        StudentFee: {
+          where: { isPaid: false },
+          select: {
+            month: true,
+            year: true,
+            student_fee: true,
+          },
+        },
+        parentUser: {
+          select: {
+            id: true,
+            fullName: true,
+            phoneNumber: true,
+          },
+        },
+        classes: {
+          select: {
+            name: true,
+          },
+        },
+      },
+    });
+
+    const groupedByFamily = new Map();
+
+    for (const student of students) {
+      const parentId = student.parentUserId;
+      if (!parentId) continue;
+
+      const key = parentId;
+      const existing = groupedByFamily.get(key);
+
+      const studentBalance = student.StudentFee.reduce(
+        (acc, fee) => acc + Number(fee.student_fee ?? 0),
+        0
+      );
+
+      const studentData = {
+        id: student.id,
+        fullname: student.fullname,
+        className: student.classes?.name ?? "",
+        unpaidFees: student.StudentFee,
+        balance: studentBalance,
+      };
+
+      if (existing) {
+        existing.totalBalance += studentBalance;
+        existing.students.push(studentData);
+      } else {
+        groupedByFamily.set(key, {
+          familyName:
+            student.familyName ??
+            student.parentUser?.fullName ??
+            "Unknown Family",
+          phones: [
+            student.parentUser?.phoneNumber ?? "",
+            student.phone,
+            student.phone2 ?? "",
+          ].filter(Boolean),
+          totalBalance: studentBalance,
+          students: [studentData],
+        });
+      }
+    }
+
+    const result = Array.from(groupedByFamily.values());
+
+    return res.status(200).json({ families: result });
+  } catch (error) {
+    console.error("Error fetching unpaid families:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};

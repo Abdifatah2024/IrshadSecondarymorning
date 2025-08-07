@@ -34,6 +34,7 @@ import {
   getStudentsWithBalancesAndDueMonths,
   addTwoDollarToStudentFees,
   addFiveDollarToNoBusStudents,
+  getUnpaidFamiliesGroupedByParent,
 } from "../controller/PaymentContorller";
 import { authenticate } from "../middlewares/authaniticator";
 
@@ -83,5 +84,5 @@ router.get("/GetStudent/Balance/Month", getStudentsWithBalancesAndDueMonths);
 router.post("/student/update-fees", addTwoDollarToStudentFees);
 // Add this to your Express router
 router.post("/student/add-busless-fee", addFiveDollarToNoBusStudents);
-
+router.get("/unpaid-families", getUnpaidFamiliesGroupedByParent);
 export default router;

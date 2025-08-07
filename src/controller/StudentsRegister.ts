@@ -3434,3 +3434,57 @@ export const getFreeStudents = async (req: Request, res: Response) => {
     });
   }
 };
+
+/**
+ * List newly registered students between a start and end date
+ * Returns: fullname, class name, phone, gender
+ */
+export const getNewlyRegisteredStudents = async (
+  req: Request,
+  res: Response
+) => {
+  const { startDate, endDate } = req.query;
+
+  if (!startDate || !endDate) {
+    return res
+      .status(400)
+      .json({ message: "Start date and end date are required" });
+  }
+
+  try {
+    const students = await prisma.student.findMany({
+      where: {
+        createdAt: {
+          gte: new Date(startDate as string),
+          lte: new Date(endDate as string),
+        },
+        isdeleted: false, // optionally exclude soft-deleted students
+      },
+      select: {
+        fullname: true,
+        phone: true,
+        gender: true,
+        classes: {
+          select: {
+            name: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+
+    const formatted = students.map((s) => ({
+      fullname: s.fullname,
+      phone: s.phone,
+      gender: s.gender,
+      className: s.classes?.name || "N/A",
+    }));
+
+    return res.status(200).json({ students: formatted });
+  } catch (error) {
+    console.error("Error fetching new students:", error);
+    return res.status(500).json({ message: "Failed to fetch new students" });
+  }
+};
