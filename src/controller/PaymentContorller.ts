@@ -3883,6 +3883,11 @@ export const getUserPaymentCollections = async (
 ) => {
   try {
     const users = await prisma.user.findMany({
+      where: {
+        role: {
+          not: "PARENT", // ✅ Exclude PARENT role
+        },
+      },
       select: {
         id: true,
         fullName: true,
