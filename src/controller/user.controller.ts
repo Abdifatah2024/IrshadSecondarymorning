@@ -313,7 +313,13 @@ export const userinfo = async (req: Request, res: Response) => {
 // ─────────────────────────────────────────────────────
 export const users = async (_req: Request, res: Response) => {
   try {
-    const list = await prisma.user.findMany();
+    const list = await prisma.user.findMany({
+      where: {
+        role: {
+          not: "PARENT", // ✅ Exclude users with role PARENT
+        },
+      },
+    });
     res.json(list);
   } catch (error) {
     console.error(error);
