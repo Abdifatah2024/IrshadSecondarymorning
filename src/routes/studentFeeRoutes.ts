@@ -37,10 +37,12 @@ import {
   getUnpaidFamiliesGroupedByParent,
 } from "../controller/PaymentContorller";
 import { authenticate } from "../middlewares/authaniticator";
+import { getNegativeFeeStudents } from "../controller/paymentVoucher.controller";
 
 const router = express.Router();
 
 // Generate monthly fees for all studentss
+router.get("/students/negative-fee", getNegativeFeeStudents);
 
 router.get("/students/balance-summaries", getAllStudentAccountSummaries);
 router.get("/students/search", searchStudentsByNameOrId);

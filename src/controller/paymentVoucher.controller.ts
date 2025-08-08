@@ -382,3 +382,44 @@ export const fetchLastGlobalPayment = async (req: Request, res: Response) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
+// controllers/studentController.ts
+
+export const getNegativeFeeStudents = async (req: Request, res: Response) => {
+  try {
+    const students = await prisma.student.findMany({
+      where: {
+        fee: {
+          lt: 0,
+        },
+        isdeleted: false,
+      },
+      select: {
+        id: true,
+        fullname: true,
+        fee: true,
+        classes: {
+          select: {
+            name: true,
+          },
+        },
+      },
+      orderBy: {
+        fullname: "asc",
+      },
+    });
+
+    res.status(200).json({
+      count: students.length,
+      students: students.map((s) => ({
+        id: s.id,
+        fullname: s.fullname,
+        fee: s.fee,
+        className: s.classes?.name || "N/A",
+      })),
+    });
+  } catch (error) {
+    console.error("Error fetching students with negative fee:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
