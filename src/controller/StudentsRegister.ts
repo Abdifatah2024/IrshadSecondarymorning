@@ -3464,6 +3464,7 @@ export const getNewlyRegisteredStudents = async (
         fullname: true,
         phone: true,
         gender: true,
+        address: true,
         classes: {
           select: {
             name: true,
@@ -3479,6 +3480,7 @@ export const getNewlyRegisteredStudents = async (
       fullname: s.fullname,
       phone: s.phone,
       gender: s.gender,
+      address: s.address || "N/A",
       className: s.classes?.name || "N/A",
     }));
 
