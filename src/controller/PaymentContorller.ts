@@ -4271,6 +4271,9 @@ export const addFiveDollarToNoBusStudents = async (
 
 // controller/fee/getUnpaidFamiliesGroupedByParent.ts
 
+// Example: src/controllers/unpaidFamily.controller.ts
+import { joinPhones, feeOrFallback } from "../prisma/utlis/prisma-utils";
+
 export const getUnpaidFamiliesGroupedByParent = async (
   req: Request,
   res: Response
@@ -4279,87 +4282,67 @@ export const getUnpaidFamiliesGroupedByParent = async (
     const students = await prisma.student.findMany({
       where: {
         isdeleted: false,
-        StudentFee: {
-          some: { isPaid: false },
-        },
+        StudentFee: { some: { isPaid: false } },
       },
       include: {
         StudentFee: {
           where: { isPaid: false },
-          select: {
-            month: true,
-            year: true,
-            student_fee: true,
-          },
+          select: { month: true, year: true, student_fee: true },
         },
-        parentUser: {
-          select: {
-            id: true,
-            fullName: true,
-            phoneNumber: true,
-          },
-        },
-        classes: {
-          select: { name: true },
-        },
+        parentUser: { select: { id: true, fullName: true, phoneNumber: true } },
+        classes: { select: { name: true } },
       },
     });
 
-    const groupedByFamily = new Map();
+    const families = new Map<number, any>();
 
-    for (const student of students) {
-      const parentId = student.parentUserId;
-      if (!parentId) continue;
+    for (const s of students) {
+      if (!s.parentUserId) continue;
 
-      const studentBalance = student.StudentFee.reduce(
-        (acc, fee) => acc + Number(fee.student_fee ?? 0),
+      const balance = s.StudentFee.reduce(
+        (acc, f) => acc + feeOrFallback(f.student_fee, s.fee),
         0
       );
 
       const studentData = {
-        id: student.id,
-        fullname: student.fullname,
-        className: student.classes?.name ?? "",
-        unpaidFees: student.StudentFee,
-        balance: studentBalance,
+        id: s.id,
+        fullname: s.fullname,
+        className: s.classes?.name ?? "",
+        unpaidFees: s.StudentFee.map((f) => ({
+          month: f.month,
+          year: f.year,
+          student_fee: feeOrFallback(f.student_fee, s.fee).toString(),
+        })),
+        balance,
       };
 
-      const existing = groupedByFamily.get(parentId);
-      if (existing) {
-        existing.totalBalance += studentBalance;
-        existing.students.push(studentData);
+      const fam = families.get(s.parentUserId);
+      if (fam) {
+        fam.totalBalance += balance;
+        fam.students.push(studentData);
       } else {
-        // remove duplicate phone numbers
-        const phoneCandidates = [
-          student.parentUser?.phoneNumber ?? "",
-          student.phone ?? "",
-          student.phone2 ?? "",
-        ]
-          .map((p) => p.trim())
-          .filter(Boolean);
-
-        const uniquePhones = Array.from(new Set(phoneCandidates));
-
-        groupedByFamily.set(parentId, {
+        const phones = joinPhones([
+          s.parentUser?.phoneNumber,
+          s.phone,
+          s.phone2,
+        ]);
+        families.set(s.parentUserId, {
           familyName:
-            student.familyName ??
-            student.parentUser?.fullName ??
-            "Unknown Family",
-          phones: uniquePhones,
-          totalBalance: studentBalance,
+            s.familyName ?? s.parentUser?.fullName ?? "Unknown Family",
+          phones: phones ? phones.split(", ") : [],
+          totalBalance: balance,
           students: [studentData],
         });
       }
     }
 
-    // ✅ Only include families with a positive balance
-    const result = Array.from(groupedByFamily.values()).filter(
-      (family) => family.totalBalance > 0
+    // only keep families with balance > 0
+    const result = Array.from(families.values()).filter(
+      (f) => f.totalBalance > 0
     );
-
-    return res.status(200).json({ families: result });
-  } catch (error) {
-    console.error("Error fetching unpaid families:", error);
+    return res.json({ families: result });
+  } catch (e) {
+    console.error(e);
     return res.status(500).json({ message: "Internal server error" });
   }
 };
