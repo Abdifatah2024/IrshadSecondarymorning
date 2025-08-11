@@ -523,7 +523,6 @@ export const createMultipleStudentsByExcel = async (
   }
 };
 
-// export const getStudentById = async (req: Request, res: Response) => {
 //   try {
 //     const studentId = Number(req.params.id);
 
@@ -587,63 +586,17 @@ export const getStudentById = async (req: Request, res: Response) => {
       return res.status(404).json({ message: "No students found" });
     }
 
-    return res.status(200).json(student);
+    // ✅ Map Age (DB) → age (API)
+    const { Age, ...rest } = student as any;
+    return res.status(200).json({
+      ...rest,
+      age: Age, // lowercase key for frontend
+    });
   } catch (error) {
     console.error("Error:", error);
     return res.status(500).json({ message: "Server error" });
   }
 };
-
-// export const getStudentByIdOrName = async (req: Request, res: Response) => {
-//   try {
-//     const query = req.params.query.trim().replace(/\s+/g, " ");
-//     const isId = !isNaN(Number(query));
-
-//     const students = await prisma.student.findMany({
-//       where: {
-//         isdeleted: false,
-//         ...(isId
-//           ? { id: Number(query) }
-//           : {
-//               OR: [
-//                 { fullname: { contains: query, mode: "insensitive" } },
-//                 { firstname: { contains: query, mode: "insensitive" } },
-//                 { lastname: { contains: query, mode: "insensitive" } },
-//                 {
-//                   AND: [
-//                     {
-//                       firstname: {
-//                         contains: query.split(" ")[0],
-//                         mode: "insensitive",
-//                       },
-//                     },
-//                     {
-//                       lastname: {
-//                         contains: query.split(" ").slice(-1)[0],
-//                         mode: "insensitive",
-//                       },
-//                     },
-//                   ],
-//                 },
-//               ],
-//             }),
-//       },
-//       include: {
-//         classes: { select: { name: true } },
-//         user: { select: { email: true } },
-//       },
-//     });
-
-//     if (students.length === 0) {
-//       return res.status(404).json({ message: "No students found" });
-//     }
-
-//     res.status(200).json(students);
-//   } catch (error) {
-//     console.error("Search error:", error);
-//     res.status(500).json({ message: "Search failed" });
-//   }
-// };
 
 export const getStudentByIdOrName = async (req: Request, res: Response) => {
   try {
