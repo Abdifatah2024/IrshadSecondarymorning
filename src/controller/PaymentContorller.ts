@@ -4300,9 +4300,7 @@ export const getUnpaidFamiliesGroupedByParent = async (
           },
         },
         classes: {
-          select: {
-            name: true,
-          },
+          select: { name: true },
         },
       },
     });
@@ -4312,9 +4310,6 @@ export const getUnpaidFamiliesGroupedByParent = async (
     for (const student of students) {
       const parentId = student.parentUserId;
       if (!parentId) continue;
-
-      const key = parentId;
-      const existing = groupedByFamily.get(key);
 
       const studentBalance = student.StudentFee.reduce(
         (acc, fee) => acc + Number(fee.student_fee ?? 0),
@@ -4329,27 +4324,38 @@ export const getUnpaidFamiliesGroupedByParent = async (
         balance: studentBalance,
       };
 
+      const existing = groupedByFamily.get(parentId);
       if (existing) {
         existing.totalBalance += studentBalance;
         existing.students.push(studentData);
       } else {
-        groupedByFamily.set(key, {
+        // remove duplicate phone numbers
+        const phoneCandidates = [
+          student.parentUser?.phoneNumber ?? "",
+          student.phone ?? "",
+          student.phone2 ?? "",
+        ]
+          .map((p) => p.trim())
+          .filter(Boolean);
+
+        const uniquePhones = Array.from(new Set(phoneCandidates));
+
+        groupedByFamily.set(parentId, {
           familyName:
             student.familyName ??
             student.parentUser?.fullName ??
             "Unknown Family",
-          phones: [
-            student.parentUser?.phoneNumber ?? "",
-            student.phone,
-            student.phone2 ?? "",
-          ].filter(Boolean),
+          phones: uniquePhones,
           totalBalance: studentBalance,
           students: [studentData],
         });
       }
     }
 
-    const result = Array.from(groupedByFamily.values());
+    // ✅ Only include families with a positive balance
+    const result = Array.from(groupedByFamily.values()).filter(
+      (family) => family.totalBalance > 0
+    );
 
     return res.status(200).json({ families: result });
   } catch (error) {
