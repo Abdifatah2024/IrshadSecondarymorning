@@ -19,7 +19,8 @@ enum Role {
   Teacher
   PARENT
   PENDING
-  ACADEMY // ✅ Corrected and clean
+  ACADEMY
+  ATTENDANCE // 👈 NEW
 }
 
 enum StudentStatus {
