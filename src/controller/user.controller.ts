@@ -401,7 +401,7 @@ const genarateToken = (user: User): string => {
 
   return jwt.sign(payload, process.env.JWT_SECRET_KEY as string, {
     issuer: "Api.Irshaad.com",
-    expiresIn: "1d",
+    expiresIn: "1h",
   });
 };
 
@@ -412,7 +412,7 @@ export const generateRefreshToken = (user: User): string => {
 
   return jwt.sign(payload, process.env.JWT_REFRESH_SECRET_KEY as string, {
     issuer: "Api.Irshaad.com",
-    expiresIn: "7d", // 7 days
+    expiresIn: "1h",
   });
 };
 
