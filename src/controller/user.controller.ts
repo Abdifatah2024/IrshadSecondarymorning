@@ -1321,6 +1321,7 @@ export const updateUserRole = async (req: Request, res: Response) => {
       "PARENT",
       "PENDING",
       "ACADEMY",
+      "ATTENDANCE",
     ];
     if (!allowedRoles.includes(newRole)) {
       return res.status(400).json({
