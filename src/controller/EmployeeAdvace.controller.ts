@@ -17,7 +17,7 @@ export const createEmployeeAdvanceAndUpdateIncome = async (
       return res.status(400).json({ message: "Missing required fields" });
     }
 
-    // ✅ NEW: Only allow current month and year
+    // ✅ Only allow current month and year
     const now = new Date();
     const currentMonth = now.getMonth() + 1;
     const currentYear = now.getFullYear();
@@ -35,7 +35,7 @@ export const createEmployeeAdvanceAndUpdateIncome = async (
       const startDate = new Date(year, month - 1, 1);
       const endDate = new Date(year, month, 0, 23, 59, 59, 999);
 
-      // ✅ 1. Get total income from Payment.amountPaid
+      // ✅ 1. Get total income
       const payments = await tx.payment.findMany({
         where: {
           date: {
@@ -51,7 +51,7 @@ export const createEmployeeAdvanceAndUpdateIncome = async (
         0
       );
 
-      // 2. Get total advances for the month
+      // ✅ 2. Get total advances (all employees)
       const existingAdvances = await tx.employeeAdvance.findMany({
         where: { month, year },
         select: { amount: true },
@@ -62,7 +62,7 @@ export const createEmployeeAdvanceAndUpdateIncome = async (
         0
       );
 
-      // 3. Get total expenses for the month
+      // ✅ 3. Get total expenses
       const expenses = await tx.expense.findMany({
         where: {
           date: {
@@ -94,7 +94,7 @@ export const createEmployeeAdvanceAndUpdateIncome = async (
         });
       }
 
-      // ✅ 4. Check employee's salary and enforce 40% limit
+      // ✅ 4. Enforce "advance must not exceed full salary"
       const employee = await tx.employee.findUnique({
         where: { id: employeeId },
         select: { salary: true },
@@ -106,9 +106,7 @@ export const createEmployeeAdvanceAndUpdateIncome = async (
           .json({ message: "Employee not found or salary missing" });
       }
 
-      const maxAllowedAdvance = employee.salary * 0.4;
-
-      // Get total advances for this employee in the given month/year
+      // Total advances for this employee in the month/year
       const employeeAdvances = await tx.employeeAdvance.findMany({
         where: {
           employeeId,
@@ -123,12 +121,12 @@ export const createEmployeeAdvanceAndUpdateIncome = async (
         0
       );
 
-      if (employeeTotalAdvance + Number(amount) > maxAllowedAdvance) {
+      if (employeeTotalAdvance + Number(amount) > employee.salary) {
         return res.status(400).json({
-          message: `Advance denied. Maximum allowed is 40% of salary: $${maxAllowedAdvance}. Already taken: $${employeeTotalAdvance}`,
+          message: `Advance denied. Cannot exceed full salary: $${employee.salary}. Already taken: $${employeeTotalAdvance}`,
           breakdown: {
             salary: employee.salary,
-            maxAllowedAdvance,
+            maxAllowedAdvance: employee.salary,
             alreadyTaken: employeeTotalAdvance,
             requested: amount,
           },
