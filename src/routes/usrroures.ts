@@ -51,6 +51,7 @@ import uploadExcel from "../config/multerExcel";
 const router = Router();
 
 /* --------------------------- Auth & Profile --------------------------- */
+router.put("/changepassword", changePassword);
 router.post("/register", register);
 router.post("/login", login);
 router.get("/whoami", authenticate, whoami);
@@ -66,7 +67,7 @@ router.put("/:id", updateUser);
 router.delete("/:id", deleteUser);
 
 /* ---------------------------- Password ---------------------------- */
-router.put("/changepassword", changePassword);
+
 router.post("/send-reset-code", sendResetCode);
 router.post("/verify-reset-code", verifyResetCodeAndChangePassword);
 

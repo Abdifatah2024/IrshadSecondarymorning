@@ -2,7 +2,7 @@ import { PrismaClient } from "@prisma/client";
 import { Prisma } from "@prisma/client";
 import { Request, Response } from "express";
 const prisma = new PrismaClient();
-// export const createStudentPayment = async (req: Request, res: Response) => {
+
 //   try {
 //     const {
 //       studentId,
