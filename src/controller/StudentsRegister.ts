@@ -975,19 +975,25 @@ interface attendance {
 
 export const markAttendance = async (req: Request, res: Response) => {
   try {
-    const { studentId, present, remark, date } = req.body as attendance & {
+    const { studentId, present, remark, date } = req.body as {
+      studentId: number | string;
+      present: boolean;
+      remark?: string;
       date?: string;
     };
 
-    const attendanceDate = date ? new Date(date) : new Date();
+    // Normalize date to UTC midnight to avoid duplicate-by-time issues
+    const inputDate = date ? new Date(date) : new Date();
     const attendanceUTCDate = new Date(
       Date.UTC(
-        attendanceDate.getUTCFullYear(),
-        attendanceDate.getUTCMonth(),
-        attendanceDate.getUTCDate()
+        inputDate.getUTCFullYear(),
+        inputDate.getUTCMonth(),
+        inputDate.getUTCDate()
       )
     );
+    const dateStr = attendanceUTCDate.toISOString().split("T")[0];
 
+    // Non-working days: Thu (4) & Fri (5)
     const day = attendanceUTCDate.getUTCDay();
     if (day === 4 || day === 5) {
       return res.status(403).json({
@@ -997,11 +1003,11 @@ export const markAttendance = async (req: Request, res: Response) => {
       });
     }
 
+    // No future dates
     const today = new Date();
     const todayUTCDate = new Date(
       Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate())
     );
-
     if (attendanceUTCDate > todayUTCDate) {
       return res.status(400).json({
         message: "Cannot mark attendance for future dates",
@@ -1015,6 +1021,7 @@ export const markAttendance = async (req: Request, res: Response) => {
         .json({ message: "Invalid attendance status format" });
     }
 
+    // For ABSENT only we require a remark
     if (!present && (!remark || remark.trim().length === 0)) {
       return res.status(400).json({
         message: "Remark is required for absent records",
@@ -1023,14 +1030,9 @@ export const markAttendance = async (req: Request, res: Response) => {
     }
 
     const student = await prisma.student.findUnique({
-      where: { id: +studentId },
-      select: {
-        id: true,
-        fullname: true,
-        phone: true,
-      },
+      where: { id: Number(studentId) },
+      select: { id: true, fullname: true, phone: true },
     });
-
     if (!student) {
       return res.status(404).json({
         message: "Student not found",
@@ -1039,8 +1041,15 @@ export const markAttendance = async (req: Request, res: Response) => {
     }
 
     // @ts-ignore
-    const user = req.user;
+    const user = req.user as { useId: number } | undefined;
+    if (!user?.useId) {
+      return res.status(401).json({
+        message: "Unauthorized: missing user context",
+        errorCode: "UNAUTHORIZED",
+      });
+    }
 
+    // Date range for the same UTC day
     const dateStart = attendanceUTCDate;
     const dateEnd = new Date(
       Date.UTC(
@@ -1050,80 +1059,105 @@ export const markAttendance = async (req: Request, res: Response) => {
       )
     );
 
-    const [existingAttendance, studentStatus] = await prisma.$transaction([
+    // We only care about existing ABSENT for no-dup / toggle
+    const [existingAbsent, lastStatus] = await prisma.$transaction([
       prisma.attendance.findFirst({
         where: {
-          studentId: +studentId,
+          studentId: Number(studentId),
+          present: false,
           date: { gte: dateStart, lt: dateEnd },
         },
       }),
       prisma.attendance.findFirst({
-        where: { studentId: +studentId },
+        where: { studentId: Number(studentId) },
         orderBy: { created_at: "desc" },
       }),
     ]);
 
-    if (existingAttendance) {
-      return res.status(409).json({
-        message: `Attendance already recorded for ${
-          attendanceUTCDate.toISOString().split("T")[0]
-        }`,
-        existingRecord: {
-          status: existingAttendance.present ? "Present" : "Absent",
-          time: existingAttendance.date.toISOString(),
-        },
-        errorCode: "DUPLICATE_ATTENDANCE",
-      });
-    }
-
-    if (!present && studentStatus?.remark === "SICK_LEAVE") {
+    // (Your special rule) Disallow absent when latest remark is SICK_LEAVE
+    if (!present && lastStatus?.remark === "SICK_LEAVE") {
       return res.status(400).json({
         message: "Cannot mark absent for students on sick leave",
         errorCode: "INVALID_STATUS_ACTION",
       });
     }
 
+    // ——— PRESENT: do NOT store. If an absence exists for that day, remove it (toggle back).
+    if (present) {
+      if (existingAbsent) {
+        await prisma.$transaction([
+          prisma.attendance.delete({ where: { id: existingAbsent.id } }),
+          prisma.student.update({
+            where: { id: Number(studentId) },
+            data: { absentCount: { decrement: 1 } },
+          }),
+        ]);
+        return res.status(200).json({
+          success: true,
+          message: `Marked Present; removed previous absence for ${dateStr}`,
+          attendance: {
+            status: "Present",
+            date: attendanceUTCDate.toISOString(),
+          },
+        });
+      }
+
+      // Idempotent present mark → no DB write
+      return res.status(200).json({
+        success: true,
+        message: `Marked Present (no record stored) for ${dateStr}`,
+        attendance: {
+          status: "Present",
+          date: attendanceUTCDate.toISOString(),
+        },
+      });
+    }
+
+    // ——— ABSENT: store ONLY absent records.
+    if (existingAbsent) {
+      return res.status(409).json({
+        message: `Attendance already recorded as Absent for ${dateStr}`,
+        errorCode: "DUPLICATE_ATTENDANCE",
+      });
+    }
+
     const newAttendance = await prisma.attendance.create({
       data: {
-        studentId: +studentId,
+        studentId: Number(studentId),
         userId: user.useId,
-        present,
-        remark: present ? "Present" : remark,
-        date: attendanceDate,
+        present: false,
+        remark: remark!.trim(),
+        date: attendanceUTCDate, // store at UTC midnight for uniqueness
       },
     });
 
-    if (!present) {
-      await prisma.student.update({
-        where: { id: +studentId },
-        data: { absentCount: { increment: 1 } },
-      });
+    // Maintain counters, notify parent
+    await prisma.student.update({
+      where: { id: Number(studentId) },
+      data: { absentCount: { increment: 1 } },
+    });
 
-      // ✅ Send parent WhatsApp message
-      if (student.phone) {
-        await sendParentAbsenceMessage(
-          student.phone,
-          student.fullname,
-          remark,
-          attendanceUTCDate.toISOString().split("T")[0]
-        );
-      }
+    if (student.phone) {
+      await sendParentAbsenceMessage(
+        student.phone,
+        student.fullname,
+        remark!,
+        dateStr
+      );
     }
 
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
-      message: `Student marked as ${present ? "Present" : "Absent"} for ${
-        attendanceUTCDate.toISOString().split("T")[0]
-      }`,
+      message: `Student marked as Absent for ${dateStr}`,
       attendance: {
         id: newAttendance.id,
-        status: newAttendance.present ? "Present" : "Absent",
+        status: "Absent",
         date: newAttendance.date.toISOString(),
       },
     });
   } catch (error) {
     console.error("Attendance error:", error);
-    res.status(500).json({
+    return res.status(500).json({
       message: "Internal server error",
       errorCode: "SERVER_ERROR",
     });
