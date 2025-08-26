@@ -1510,51 +1510,143 @@ export const markAbsenteesBulk = async (req: Request, res: Response) => {
 export const getAttendance = async (req: Request, res: Response) => {
   try {
     const studentId = Number(req.params.id);
-    const { date, present } = req.query;
+    const presentParam = (
+      req.query.present as string | undefined
+    )?.toLowerCase(); // "true"/"false"/undefined
+    const dateParam = req.query.date as string | undefined; // ISO date string (single day)
+    const monthParam = req.query.month as string | undefined; // 1..12
+    const yearParam = req.query.year as string | undefined; // e.g. 2025
 
-    const whereClause: any = {
-      studentId,
+    if (!Number.isFinite(studentId)) {
+      return res.status(400).json({ message: "Invalid student id" });
+    }
+
+    // --- helpers (UTC-normalized) ---
+    const toUTCDateOnly = (d: Date) =>
+      new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+
+    const addDaysUTC = (d: Date, days: number) =>
+      new Date(
+        Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + days)
+      );
+
+    // Working days are Sat (6) .. Wed (3). (Thu=4, Fri=5 are OFF)
+    const isWorkingDayUTC = (d: Date) => {
+      const dow = d.getUTCDay(); // 0=Sun ... 6=Sat
+      return dow === 6 || dow === 0 || dow === 1 || dow === 2 || dow === 3;
     };
 
-    // Optional: filter by date
-    if (date) {
-      const selectedDate = new Date(date as string);
-      selectedDate.setHours(0, 0, 0, 0);
+    const monthRangeUTC = (year: number, month1to12: number) => {
+      const start = new Date(Date.UTC(year, month1to12 - 1, 1));
+      const end = new Date(Date.UTC(year, month1to12, 1)); // exclusive
+      return { start, end };
+    };
 
-      const nextDate = new Date(selectedDate);
-      nextDate.setDate(nextDate.getDate() + 1);
+    // --- choose range (single day OR month, default to current month for present-computation) ---
+    let start: Date;
+    let end: Date;
 
-      whereClause.date = {
-        gte: selectedDate,
-        lt: nextDate,
-      };
+    if (dateParam) {
+      // Single day
+      const d = new Date(dateParam);
+      if (Number.isNaN(d.getTime())) {
+        return res.status(400).json({ message: "Invalid date" });
+      }
+      start = toUTCDateOnly(d);
+      end = addDaysUTC(start, 1);
+    } else if (monthParam && yearParam) {
+      // Full month
+      const m = Number(monthParam);
+      const y = Number(yearParam);
+      if (!m || m < 1 || m > 12 || !y) {
+        return res.status(400).json({ message: "Invalid month/year" });
+      }
+      ({ start, end } = monthRangeUTC(y, m));
+    } else {
+      // Default: current month (useful for present computation)
+      const now = new Date();
+      ({ start, end } = monthRangeUTC(
+        now.getUTCFullYear(),
+        now.getUTCMonth() + 1
+      ));
     }
 
-    // Optional: filter by present/absent
-    if (present !== undefined) {
-      whereClause.present = present === "true";
+    // If client does NOT specify 'present', keep the original behavior:
+    // return stored attendance rows (which are absences in your model).
+    if (presentParam === undefined) {
+      const records = await prisma.attendance.findMany({
+        where: { studentId, date: { gte: start, lt: end } },
+        include: { user: { select: { fullName: true } } },
+        orderBy: { date: "desc" },
+      });
+      return res.status(200).json({ records });
     }
 
-    const attendance = await prisma.attendance.findMany({
-      where: whereClause,
-      include: {
-        user: {
-          select: {
-            fullName: true,
-          },
-        },
-      },
-      orderBy: {
-        date: "desc",
-      },
+    // If client explicitly wants ABSENT => return stored absences in range
+    if (presentParam === "false") {
+      const records = await prisma.attendance.findMany({
+        where: { studentId, present: false, date: { gte: start, lt: end } },
+        include: { user: { select: { fullName: true } } },
+        orderBy: { date: "desc" },
+      });
+      return res.status(200).json({ records });
+    }
+
+    // ---------- presentParam === "true" ------------
+    // Compute "present days" = working days in range MINUS absent days in range.
+    // We do NOT read any "present" DB rows (they don't exist).
+    const absences = await prisma.attendance.findMany({
+      where: { studentId, present: false, date: { gte: start, lt: end } },
+      select: { date: true }, // we only need the dates to exclude them
     });
 
-    res.status(200).json({ records: attendance });
+    // Build a Set of YYYY-MM-DD for absent days (UTC)
+    const fmt = (d: Date) => toUTCDateOnly(d).toISOString().slice(0, 10);
+    const absentSet = new Set(absences.map((a) => fmt(a.date)));
+
+    // Enumerate all working days in [start, end)
+    const workingDates: Date[] = [];
+    for (let d = new Date(start); d < end; d = addDaysUTC(d, 1)) {
+      if (isWorkingDayUTC(d)) workingDates.push(new Date(d));
+    }
+
+    // Present = workingDays - absences (by day)
+    const presentDates = workingDates.filter((d) => !absentSet.has(fmt(d)));
+
+    // Return a records array of synthetic "Present" rows (keeps response shape).
+    // You can include a hint field like `computed: true` if you want.
+    const records = presentDates
+      .map((d) => ({
+        id: null, // no DB id
+        studentId,
+        present: true,
+        remark: "Present",
+        date: toUTCDateOnly(d), // consistent UTC midnight
+        user: null, // no user for computed rows
+        computed: true, // helpful flag for UI (optional)
+      }))
+      .sort((a, b) => b.date.getTime() - a.date.getTime());
+
+    // Also include a small summary to make life easier (optional)
+    const summary = {
+      scope: {
+        start: start.toISOString().slice(0, 10),
+        endExclusive: end.toISOString().slice(0, 10),
+      },
+      workingDays: workingDates.length,
+      absentDays: absentSet.size,
+      presentDays: presentDates.length,
+    };
+
+    return res.status(200).json({ records, summary });
   } catch (error) {
     console.error("Error fetching attendance:", error);
-    res.status(500).json({ message: "Server error while fetching attendance" });
+    return res
+      .status(500)
+      .json({ message: "Server error while fetching attendance" });
   }
 };
+
 // get allAbsent
 export const getAllAbsenteesByDate = async (req: Request, res: Response) => {
   try {
