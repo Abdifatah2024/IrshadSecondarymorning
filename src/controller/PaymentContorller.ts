@@ -1499,193 +1499,6 @@ export const getStudentsWithUnpaidFeesOrBalance = async (
   }
 };
 
-// export const getMonthlyIncomeOverview = async (req: Request, res: Response) => {
-//   try {
-//     const month = Number(req.query.month);
-//     const year = Number(req.query.year);
-
-//     if (!month || !year) {
-//       return res.status(400).json({
-//         message: "Both month and year query parameters are required",
-//       });
-//     }
-
-//     const startDate = new Date(year, month - 1, 1);
-//     const endDate = new Date(year, month, 0, 23, 59, 59, 999);
-
-//     // 1. Current month fee records
-//     const studentFeesCurrent = await prisma.studentFee.findMany({
-//       where: {
-//         month,
-//         year,
-//         student: {
-//           isdeleted: false,
-//           status: "ACTIVE",
-//         },
-//       },
-//       include: {
-//         student: {
-//           select: { fee: true },
-//         },
-//       },
-//     });
-
-//     const expectedFromCurrentMonth = studentFeesCurrent.reduce(
-//       (sum, record) => sum + Number(record.student.fee || 0),
-//       0
-//     );
-
-//     // 2. Previous unpaid months
-//     const unpaidPastFees = await prisma.studentFee.findMany({
-//       where: {
-//         isPaid: false,
-//         OR: [{ year: { lt: year } }, { year, month: { lt: month } }],
-//         student: {
-//           isdeleted: false,
-//           status: "ACTIVE",
-//         },
-//       },
-//       include: {
-//         student: {
-//           select: { id: true, fee: true },
-//         },
-//         PaymentAllocation: {
-//           select: { amount: true },
-//         },
-//       },
-//     });
-
-//     const expectedFromPreviousMonths = unpaidPastFees.reduce((sum, fee) => {
-//       const paid = fee.PaymentAllocation.reduce(
-//         (s, a) => s + Number(a.amount),
-//         0
-//       );
-//       return sum + Math.max(0, Number(fee.student.fee) - paid);
-//     }, 0);
-
-//     // 3. Total expected
-//     const requiredIncome =
-//       expectedFromCurrentMonth + expectedFromPreviousMonths;
-
-//     // 4. This month’s actual allocations
-//     const allocations = await prisma.paymentAllocation.findMany({
-//       where: {
-//         payment: {
-//           date: {
-//             gte: startDate,
-//             lte: endDate,
-//           },
-//         },
-//       },
-//       include: {
-//         studentFee: {
-//           select: {
-//             month: true,
-//             year: true,
-//             student: { select: { fee: true } },
-//           },
-//         },
-//       },
-//     });
-
-//     let lateIncome = 0;
-//     let currentIncome = 0;
-//     let advanceIncome = 0;
-
-//     for (const alloc of allocations) {
-//       const amount = Number(alloc.amount);
-//       const allocMonth = alloc.studentFee.month;
-//       const allocYear = alloc.studentFee.year;
-
-//       if (allocYear < year || (allocYear === year && allocMonth < month)) {
-//         lateIncome += amount;
-//       } else if (allocYear === year && allocMonth === month) {
-//         currentIncome += amount;
-//       } else {
-//         advanceIncome += amount;
-//       }
-//     }
-
-//     const totalIncome = lateIncome + currentIncome + advanceIncome;
-
-//     // 5. Payment records for this month (actual paid + discount)
-//     const payments = await prisma.payment.findMany({
-//       where: {
-//         date: {
-//           gte: startDate,
-//           lte: endDate,
-//         },
-//       },
-//       select: {
-//         amountPaid: true,
-//         discount: true,
-//       },
-//     });
-
-//     const actualPaid = payments.reduce(
-//       (sum, p) => sum + Number(p.amountPaid),
-//       0
-//     );
-//     const totalDiscount = payments.reduce(
-//       (sum, p) => sum + Number(p.discount),
-//       0
-//     );
-
-//     const balance = Math.max(0, requiredIncome - totalIncome);
-
-//     // 6. 🔥 NEW: System-wide unpaid balance (from all unpaid StudentFee)
-//     const allUnpaidFees = await prisma.studentFee.findMany({
-//       where: {
-//         isPaid: false,
-//         student: {
-//           isdeleted: false,
-//           status: "ACTIVE",
-//         },
-//       },
-//       include: {
-//         student: { select: { fee: true } },
-//         PaymentAllocation: { select: { amount: true } },
-//       },
-//     });
-
-//     const unpaidBalanceSystemWide = allUnpaidFees.reduce((sum, fee) => {
-//       const paid = fee.PaymentAllocation.reduce(
-//         (s, a) => s + Number(a.amount),
-//         0
-//       );
-//       return sum + Math.max(0, Number(fee.student.fee || 0) - paid);
-//     }, 0);
-
-//     res.status(200).json({
-//       month,
-//       year,
-//       totalStudents: studentFeesCurrent.length,
-//       requiredIncome: {
-//         total: requiredIncome,
-//         expectedFromPreviousMonths,
-//         expectedFromCurrentMonth,
-//       },
-//       actualPaid,
-//       totalDiscount,
-//       totalIncome,
-//       balance,
-//       unpaidBalanceSystemWide, // 👈 system-wide balance across all months
-//       breakdown: {
-//         lateIncome,
-//         currentIncome,
-//         advanceIncome,
-//       },
-//       message: `Your income is ${totalIncome}. Late: ${lateIncome}, Current: ${currentIncome}, Advance: ${advanceIncome}`,
-//     });
-//   } catch (error) {
-//     console.error("Error generating income overview:", error);
-//     res.status(500).json({
-//       message: "Internal server error while generating income overview",
-//       error: error instanceof Error ? error.message : String(error),
-//     });
-//   }
-// };
-
 // DELETE /api/delete-student-fees?month=5&year=2025
 export const getMonthlyIncomeOverview = async (req: Request, res: Response) => {
   try {
@@ -4073,6 +3886,48 @@ export const getStudentsWithBalancesAndDueMonths = async (
   }
 };
 
+// export const addTwoDollarToStudentFees = async (
+//   req: Request,
+//   res: Response
+// ) => {
+//   try {
+//     // Fetch all active students who are not deleted and have a fee > 0
+//     const studentsToUpdate = await prisma.student.findMany({
+//       where: {
+//         isdeleted: false,
+//         fee: {
+//           gt: 0, // Skip students with fee 0
+//         },
+//       },
+//       select: {
+//         id: true,
+//         fee: true,
+//       },
+//     });
+
+//     let updatedCount = 0;
+
+//     for (const student of studentsToUpdate) {
+//       await prisma.student.update({
+//         where: { id: student.id },
+//         data: {
+//           fee: student.fee + 2, // Add $2 to the current fee
+//         },
+//       });
+//       updatedCount++;
+//     }
+
+//     res.status(200).json({
+//       message: `${updatedCount} students' fees were updated by $2.`,
+//     });
+//   } catch (error) {
+//     console.error("Fee Update Error:", error);
+//     res.status(500).json({
+//       message: "Failed to update student fees.",
+//       error: error instanceof Error ? error.message : "Unknown error",
+//     });
+//   }
+// };
 export const addTwoDollarToStudentFees = async (
   req: Request,
   res: Response
@@ -4093,19 +3948,25 @@ export const addTwoDollarToStudentFees = async (
     });
 
     let updatedCount = 0;
+    let skippedCount = 0;
 
     for (const student of studentsToUpdate) {
-      await prisma.student.update({
-        where: { id: student.id },
-        data: {
-          fee: student.fee + 2, // Add $2 to the current fee
-        },
-      });
-      updatedCount++;
+      if (student.fee < 27) {
+        // Calculate new fee, capped at 27
+        const newFee = Math.min(student.fee + 2, 27);
+
+        await prisma.student.update({
+          where: { id: student.id },
+          data: { fee: newFee },
+        });
+        updatedCount++;
+      } else {
+        skippedCount++;
+      }
     }
 
     res.status(200).json({
-      message: `${updatedCount} students' fees were updated by $2.`,
+      message: `${updatedCount} students' fees were updated (up to $27). ${skippedCount} students were skipped because their fee is already $27.`,
     });
   } catch (error) {
     console.error("Fee Update Error:", error);
@@ -4346,3 +4207,412 @@ export const getUnpaidFamiliesGroupedByParent = async (
     return res.status(500).json({ message: "Internal server error" });
   }
 };
+
+
+
+// controllers/paymentController.ts
+
+
+
+
+export const applyTwoDollarRelief = async (req: Request, res: Response) => {
+  try {
+    const month = Number(req.query.month);
+    const year = Number(req.query.year);
+    if (!month || !year) {
+      return res.status(400).json({ message: "month and year are required" });
+    }
+
+    // @ts-ignore
+    const user = req.user as { useId?: number; userId?: number; id?: number; role?: string };
+    if (!["ADMIN", "USER"].includes(user?.role || "")) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
+    // Resolve and verify auth user id to avoid FK violation
+    const authUserId = Number(user.useId ?? user.userId ?? user.id);
+    if (!Number.isFinite(authUserId)) {
+      return res.status(401).json({ message: "Invalid auth user id in token." });
+    }
+    const authUserExists = await prisma.user.findUnique({
+      where: { id: authUserId },
+      select: { id: true },
+    });
+    if (!authUserExists) {
+      return res.status(401).json({
+        message: "Authenticated user not found. Please log in again.",
+      });
+    }
+
+    const RELIEF_REASON = "RELIEF_$2";
+
+    const results = await prisma.$transaction(async (tx) => {
+      // Prefilter to likely-due fees (isPaid=false) for performance
+      const fees = await tx.studentFee.findMany({
+        where: {
+          month,
+          year,
+          isPaid: false,
+          student: { isdeleted: false, status: "ACTIVE" },
+        },
+        include: {
+          student: { select: { id: true, fullname: true, fee: true } },
+          PaymentAllocation: { select: { amount: true } },
+        },
+      });
+
+      let processed = 0;
+      const items: Array<{
+        studentId: number;
+        studentName: string;
+        month: number;
+        year: number;
+        dueBefore: number;
+        reliefApplied: number;
+        feeId: number;
+        paymentId?: number;
+        alreadyApplied?: boolean;
+        nowPaid?: boolean;
+      }> = [];
+
+      for (const fee of fees) {
+        const monthlyFee = Number(fee.student.fee || 0);
+        const alreadyAllocated = fee.PaymentAllocation.reduce(
+          (s, a) => s + Number(a.amount),
+          0
+        );
+        const due = Math.max(0, monthlyFee - alreadyAllocated);
+
+        // Only apply to students WITH outstanding balance
+        if (due <= 0) {
+          // (Optional: you can skip logging these entirely)
+          continue;
+        }
+
+        // Idempotency: skip if already applied for this fee/month/year
+        const priorRelief = await tx.discountLog.findFirst({
+          where: {
+            studentId: fee.student.id,
+            studentFeeId: fee.id,
+            month,
+            year,
+            reason: RELIEF_REASON,
+          },
+          select: { id: true },
+        });
+        if (priorRelief) {
+          items.push({
+            studentId: fee.student.id,
+            studentName: fee.student.fullname,
+            month,
+            year,
+            dueBefore: due,
+            reliefApplied: 0,
+            feeId: fee.id,
+            alreadyApplied: true,
+          });
+          continue;
+        }
+
+        const relief = Math.min(2, due);
+        const reliefRounded = Number(relief.toFixed(2));
+
+        // Create a $0 payment with discount == relief
+        const payment = await tx.payment.create({
+          data: {
+            studentId: fee.student.id,
+            userId: authUserId,
+            amountPaid: 0,
+            discount: reliefRounded,
+            Description: "Automatic $2 relief",
+          },
+        });
+
+        // Allocate the discount to this StudentFee
+        await tx.paymentAllocation.create({
+          data: {
+            studentId: fee.student.id,
+            studentFeeId: fee.id,
+            paymentId: payment.id,
+            amount: reliefRounded,
+          },
+        });
+
+        // Log the discount (idempotency anchor)
+        await tx.discountLog.create({
+          data: {
+            studentId: fee.student.id,
+            studentFeeId: fee.id,
+            amount: reliefRounded,
+            reason: RELIEF_REASON,
+            month,
+            year,
+            approvedBy: authUserId,
+            verified: true,
+            verifiedAt: new Date(),
+            verifiedBy: "system-relief",
+          },
+        });
+
+        // Mark paid if fully covered now
+        const newDue = due - reliefRounded;
+        let nowPaid = false;
+        if (newDue <= 0) {
+          await tx.studentFee.update({
+            where: { id: fee.id },
+            data: { isPaid: true },
+          });
+          nowPaid = true;
+        }
+
+        processed++;
+        items.push({
+          studentId: fee.student.id,
+          studentName: fee.student.fullname,
+          month,
+          year,
+          dueBefore: due,
+          reliefApplied: reliefRounded,
+          feeId: fee.id,
+          paymentId: payment.id,
+          nowPaid,
+        });
+      }
+
+      return { processed, items, totalFeesChecked: fees.length };
+    });
+
+    res.status(200).json({
+      message: `Applied $2 relief (only to fees with outstanding balance) for ${month}/${year}.`,
+      summary: {
+        totalFeesChecked: results.totalFeesChecked,
+        processed: results.processed,
+        skippedAlreadyApplied: results.items.filter(i => i.alreadyApplied).length,
+        totalReliefApplied: results.items.reduce((s, i) => s + (i.reliefApplied || 0), 0),
+        newlyPaidCount: results.items.filter(i => i.nowPaid).length,
+      },
+      details: results.items,
+    });
+  } catch (error) {
+    console.error("Error applying $2 relief:", error);
+    res.status(500).json({
+      message: "Internal server error while applying relief",
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+};
+// export const applyTwoDollarRelief = async (req: Request, res: Response) => {
+//   try {
+//     const month = Number(req.query.month);
+//     const year = Number(req.query.year);
+//     if (!month || !year) {
+//       return res.status(400).json({ message: "month and year are required" });
+//     }
+
+//     // @ts-ignore
+//     const user = req.user as { useId?: number; userId?: number; id?: number; role?: string };
+//     if (!["ADMIN", "USER"].includes(user?.role || "")) {
+//       return res.status(403).json({ message: "Access denied" });
+//     }
+
+//     // Resolve auth user ID
+//     const authUserId = Number(user.useId ?? user.userId ?? user.id);
+//     if (!Number.isFinite(authUserId)) {
+//       return res.status(401).json({ message: "Invalid auth user id in token." });
+//     }
+//     const authUserExists = await prisma.user.findUnique({
+//       where: { id: authUserId },
+//       select: { id: true },
+//     });
+//     if (!authUserExists) {
+//       return res.status(401).json({
+//         message: "Authenticated user not found. Please log in again.",
+//       });
+//     }
+
+//     const RELIEF_REASON = "RELIEF_$2";
+
+//     // 1) Get ALL target students (fee > 0, active, not deleted)
+//     const targets = await prisma.student.findMany({
+//       where: {
+//         isdeleted: false,
+//         status: "ACTIVE",
+//         fee: { gt: 0 },
+//       },
+//       select: { id: true, fullname: true, fee: true },
+//     });
+
+//     if (targets.length === 0) {
+//       return res.status(200).json({
+//         message: "No active students with fee > 0 found.",
+//         summary: { processed: 0, alreadyApplied: 0, createdFees: 0, totalReliefApplied: 0 },
+//         details: [],
+//       });
+//     }
+
+//     // chunk the work to avoid interactive transaction timeouts
+//     const CHUNK_SIZE = 200;
+//     const chunks: typeof targets[] = [];
+//     for (let i = 0; i < targets.length; i += CHUNK_SIZE) {
+//       chunks.push(targets.slice(i, i + CHUNK_SIZE));
+//     }
+
+//     let processed = 0;
+//     let alreadyApplied = 0;
+//     let createdFees = 0;
+//     let totalReliefApplied = 0;
+
+//     const details: Array<{
+//       studentId: number;
+//       studentName: string;
+//       feeId: number;
+//       month: number;
+//       year: number;
+//       reliefApplied: number;
+//       paymentId?: number;
+//       status: "applied" | "skipped_already_applied";
+//       isPaidAfter?: boolean;
+//     }> = [];
+
+//     for (const group of chunks) {
+//       await prisma.$transaction(async (tx) => {
+//         for (const student of group) {
+//           // 2) Ensure StudentFee exists for (student, month, year)
+//           let feeRow = await tx.studentFee.findFirst({
+//             where: { studentId: student.id, month, year },
+//             select: { id: true, isPaid: true },
+//           });
+
+//           if (!feeRow) {
+//             feeRow = await tx.studentFee.create({
+//               data: {
+//                 studentId: student.id,
+//                 month,
+//                 year,
+//                 isPaid: false,
+//               },
+//               select: { id: true, isPaid: true },
+//             });
+//             createdFees++;
+//           }
+
+//           // 3) Idempotency: was this relief already applied?
+//           const prior = await tx.discountLog.findFirst({
+//             where: {
+//               studentId: student.id,
+//               studentFeeId: feeRow.id,
+//               month,
+//               year,
+//               reason: RELIEF_REASON,
+//             },
+//             select: { id: true },
+//           });
+
+//           if (prior) {
+//             alreadyApplied++;
+//             details.push({
+//               studentId: student.id,
+//               studentName: student.fullname,
+//               feeId: feeRow.id,
+//               month,
+//               year,
+//               reliefApplied: 0,
+//               status: "skipped_already_applied",
+//               isPaidAfter: feeRow.isPaid,
+//             });
+//             continue;
+//           }
+
+//           // 4) Apply flat $2 discount (no balance check)
+//           const relief = 2.0; // apply regardless of outstanding balance
+//           const payment = await tx.payment.create({
+//             data: {
+//               studentId: student.id,
+//               userId: authUserId,
+//               amountPaid: 0,
+//               discount: relief,
+//               Description: "Automatic $2 relief (global)",
+//             },
+//             select: { id: true },
+//           });
+
+//           await tx.paymentAllocation.create({
+//             data: {
+//               studentId: student.id,
+//               studentFeeId: feeRow.id,
+//               paymentId: payment.id,
+//               amount: relief,
+//             },
+//           });
+
+//           await tx.discountLog.create({
+//             data: {
+//               studentId: student.id,
+//               studentFeeId: feeRow.id,
+//               amount: relief,
+//               reason: RELIEF_REASON,
+//               month,
+//               year,
+//               approvedBy: authUserId,
+//               verified: true,
+//               verifiedAt: new Date(),
+//               verifiedBy: "system-relief",
+//             },
+//           });
+
+//           // 5) Keep isPaid consistent (optional safety)
+//           // If allocations now cover or exceed the base fee, mark isPaid true
+//           const allocationsSum = await tx.paymentAllocation.aggregate({
+//             where: { studentFeeId: feeRow.id },
+//             _sum: { amount: true },
+//           });
+
+//           const allocated = Number(allocationsSum._sum.amount ?? 0);
+//           const shouldBePaid = allocated >= Number(student.fee || 0);
+
+//           let isPaidAfter = feeRow.isPaid;
+//           if (shouldBePaid && !feeRow.isPaid) {
+//             await tx.studentFee.update({
+//               where: { id: feeRow.id },
+//               data: { isPaid: true },
+//             });
+//             isPaidAfter = true;
+//           }
+
+//           processed++;
+//           totalReliefApplied += relief;
+
+//           details.push({
+//             studentId: student.id,
+//             studentName: student.fullname,
+//             feeId: feeRow.id,
+//             month,
+//             year,
+//             reliefApplied: relief,
+//             paymentId: payment.id,
+//             status: "applied",
+//             isPaidAfter,
+//           });
+//         }
+//       }, { timeout: 20000 }); // allow up to 20s per chunk
+//     }
+
+//     return res.status(200).json({
+//       message: `Applied flat $2 relief to ALL active students with fee > 0 for ${month}/${year} (idempotent; no balance checks).`,
+//       summary: {
+//         totalTargets: targets.length,
+//         processed,
+//         alreadyApplied,
+//         createdFees,
+//         totalReliefApplied: Number(totalReliefApplied.toFixed(2)),
+//       },
+//       details,
+//     });
+//   } catch (error) {
+//     console.error("Error applying $2 relief (global):", error);
+//     return res.status(500).json({
+//       message: "Internal server error while applying relief",
+//       error: error instanceof Error ? error.message : String(error),
+//     });
+//   }
+// };

@@ -35,6 +35,8 @@ import {
   addTwoDollarToStudentFees,
   addFiveDollarToNoBusStudents,
   getUnpaidFamiliesGroupedByParent,
+  applyTwoDollarRelief,
+
 } from "../controller/PaymentContorller";
 import { authenticate } from "../middlewares/authaniticator";
 import { getNegativeFeeStudents } from "../controller/paymentVoucher.controller";
@@ -87,4 +89,9 @@ router.post("/student/update-fees", addTwoDollarToStudentFees);
 // Add this to your Express router
 router.post("/student/add-busless-fee", addFiveDollarToNoBusStudents);
 router.get("/unpaid-families", getUnpaidFamiliesGroupedByParent);
+router.post("/fees/relief", authenticate, applyTwoDollarRelief);
+// Usage: POST /api/fees/relief?month=8&year=2025
+
+
+
 export default router;
