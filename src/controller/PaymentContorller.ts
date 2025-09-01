@@ -4401,218 +4401,167 @@ export const applyTwoDollarRelief = async (req: Request, res: Response) => {
     });
   }
 };
-// export const applyTwoDollarRelief = async (req: Request, res: Response) => {
-//   try {
-//     const month = Number(req.query.month);
-//     const year = Number(req.query.year);
-//     if (!month || !year) {
-//       return res.status(400).json({ message: "month and year are required" });
-//     }
 
-//     // @ts-ignore
-//     const user = req.user as { useId?: number; userId?: number; id?: number; role?: string };
-//     if (!["ADMIN", "USER"].includes(user?.role || "")) {
-//       return res.status(403).json({ message: "Access denied" });
-//     }
 
-//     // Resolve auth user ID
-//     const authUserId = Number(user.useId ?? user.userId ?? user.id);
-//     if (!Number.isFinite(authUserId)) {
-//       return res.status(401).json({ message: "Invalid auth user id in token." });
-//     }
-//     const authUserExists = await prisma.user.findUnique({
-//       where: { id: authUserId },
-//       select: { id: true },
-//     });
-//     if (!authUserExists) {
-//       return res.status(401).json({
-//         message: "Authenticated user not found. Please log in again.",
-//       });
-//     }
+/**
+ * POST /api/payments/check-number-history
+ * Body options:
+ * {
+ *   "number": "63xxxxxxx",
+ *   "methods": ["ZAAD","E-DAHAB"],   // optional, defaults to both
+ *   "month": 8,                      // optional
+ *   "year": 2025,                    // optional
+ *   "dateStart": "2025-08-01",       // optional (YYYY-MM-DD)
+ *   "dateEnd": "2025-08-31"          // optional (YYYY-MM-DD)
+ * }
+ */
+export const checkPaymentHistoryByNumber = async (req: Request, res: Response) => {
+  try {
+    const { number, methods, month, year, dateStart, dateEnd } = req.body as {
+      number?: string;
+      methods?: string[];
+      month?: number | string;
+      year?: number | string;
+      dateStart?: string;
+      dateEnd?: string;
+    };
 
-//     const RELIEF_REASON = "RELIEF_$2";
+    if (!number || !String(number).trim()) {
+      return res.status(400).json({ message: "number is required" });
+    }
 
-//     // 1) Get ALL target students (fee > 0, active, not deleted)
-//     const targets = await prisma.student.findMany({
-//       where: {
-//         isdeleted: false,
-//         status: "ACTIVE",
-//         fee: { gt: 0 },
-//       },
-//       select: { id: true, fullname: true, fee: true },
-//     });
+    // Default methods
+    const methodList = Array.isArray(methods) && methods.length > 0
+      ? methods
+      : ["ZAAD", "E-DAHAB"];
 
-//     if (targets.length === 0) {
-//       return res.status(200).json({
-//         message: "No active students with fee > 0 found.",
-//         summary: { processed: 0, alreadyApplied: 0, createdFees: 0, totalReliefApplied: 0 },
-//         details: [],
-//       });
-//     }
+    const normalizedNumber = String(number).trim();
+    const formattedDescriptions = methodList.map((m) => `${m} - ${normalizedNumber}`);
 
-//     // chunk the work to avoid interactive transaction timeouts
-//     const CHUNK_SIZE = 200;
-//     const chunks: typeof targets[] = [];
-//     for (let i = 0; i < targets.length; i += CHUNK_SIZE) {
-//       chunks.push(targets.slice(i, i + CHUNK_SIZE));
-//     }
+    // Build date filter
+    let dateFilter: { gte: Date; lte: Date } | undefined;
 
-//     let processed = 0;
-//     let alreadyApplied = 0;
-//     let createdFees = 0;
-//     let totalReliefApplied = 0;
+    if (dateStart && dateEnd) {
+      // explicit date range
+      dateFilter = {
+        gte: new Date(dateStart),
+        lte: new Date(new Date(dateEnd).setHours(23, 59, 59, 999)),
+      };
+    } else if (month && year) {
+      const m = Number(month);
+      const y = Number(year);
+      const start = new Date(y, m - 1, 1);
+      const end = new Date(y, m, 0, 23, 59, 59, 999);
+      dateFilter = { gte: start, lte: end };
+    } else if (year) {
+      const y = Number(year);
+      const start = new Date(y, 0, 1);
+      const end = new Date(y, 11, 31, 23, 59, 59, 999);
+      dateFilter = { gte: start, lte: end };
+    }
 
-//     const details: Array<{
-//       studentId: number;
-//       studentName: string;
-//       feeId: number;
-//       month: number;
-//       year: number;
-//       reliefApplied: number;
-//       paymentId?: number;
-//       status: "applied" | "skipped_already_applied";
-//       isPaidAfter?: boolean;
-//     }> = [];
+    // Query DB
+    const payments = await prisma.payment.findMany({
+      where: {
+        Description: { in: formattedDescriptions },
+        ...(dateFilter ? { date: dateFilter } : {}),
+      },
+      orderBy: { date: "desc" },
+      include: {
+        user: { select: { fullName: true } },
+        allocations: {
+          include: {
+            studentFee: true,
+            Student: {
+              include: {
+                classes: { select: { name: true } },
+              },
+            },
+          },
+        },
+      },
+    });
 
-//     for (const group of chunks) {
-//       await prisma.$transaction(async (tx) => {
-//         for (const student of group) {
-//           // 2) Ensure StudentFee exists for (student, month, year)
-//           let feeRow = await tx.studentFee.findFirst({
-//             where: { studentId: student.id, month, year },
-//             select: { id: true, isPaid: true },
-//           });
+    // Build flat rows
+    const rows = payments.flatMap((p) => {
+      const [method = "", num = ""] = String(p.Description).split(" - ");
+      return p.allocations.map((alloc) => ({
+        student: alloc.Student?.fullname ?? "Unknown",
+        class: alloc.Student?.classes?.name ?? "N/A",
+        amount: Number(alloc.amount),
+        month: alloc.studentFee?.month ?? null,
+        year: alloc.studentFee?.year ?? null,
+        date: p.date,
+        user: p.user?.fullName ?? "Unknown",
+        method,
+        number: num,
+        paymentId: p.id,
+      }));
+    });
 
-//           if (!feeRow) {
-//             feeRow = await tx.studentFee.create({
-//               data: {
-//                 studentId: student.id,
-//                 month,
-//                 year,
-//                 isPaid: false,
-//               },
-//               select: { id: true, isPaid: true },
-//             });
-//             createdFees++;
-//           }
+    // Totals
+    const totalAmountThisMonth = rows.reduce((sum, r) => sum + (r.amount || 0), 0);
 
-//           // 3) Idempotency: was this relief already applied?
-//           const prior = await tx.discountLog.findFirst({
-//             where: {
-//               studentId: student.id,
-//               studentFeeId: feeRow.id,
-//               month,
-//               year,
-//               reason: RELIEF_REASON,
-//             },
-//             select: { id: true },
-//           });
+    // Effective dateStart/dateEnd in response
+    const effectiveDateStart = dateFilter
+      ? dateFilter.gte
+      : (payments.length ? new Date(Math.min(...payments.map(p => p.date.getTime()))) : null);
 
-//           if (prior) {
-//             alreadyApplied++;
-//             details.push({
-//               studentId: student.id,
-//               studentName: student.fullname,
-//               feeId: feeRow.id,
-//               month,
-//               year,
-//               reliefApplied: 0,
-//               status: "skipped_already_applied",
-//               isPaidAfter: feeRow.isPaid,
-//             });
-//             continue;
-//           }
+    const effectiveDateEnd = dateFilter
+      ? dateFilter.lte
+      : (payments.length ? new Date(Math.max(...payments.map(p => p.date.getTime()))) : null);
 
-//           // 4) Apply flat $2 discount (no balance check)
-//           const relief = 2.0; // apply regardless of outstanding balance
-//           const payment = await tx.payment.create({
-//             data: {
-//               studentId: student.id,
-//               userId: authUserId,
-//               amountPaid: 0,
-//               discount: relief,
-//               Description: "Automatic $2 relief (global)",
-//             },
-//             select: { id: true },
-//           });
+    // Grouped payments
+    const grouped = payments.map((p) => {
+      const [method = "", num = ""] = String(p.Description).split(" - ");
+      return {
+        paymentId: p.id,
+        description: p.Description,
+        method,
+        number: num,
+        createdAt: p.date,
+        user: p.user?.fullName ?? "Unknown",
+        paidFor: p.allocations.map((alloc) => ({
+          student: alloc.Student?.fullname ?? "Unknown",
+          class: alloc.Student?.classes?.name ?? "N/A",
+          month: alloc.studentFee?.month ?? null,
+          year: alloc.studentFee?.year ?? null,
+          amount: Number(alloc.amount),
+        })),
+      };
+    });
 
-//           await tx.paymentAllocation.create({
-//             data: {
-//               studentId: student.id,
-//               studentFeeId: feeRow.id,
-//               paymentId: payment.id,
-//               amount: relief,
-//             },
-//           });
+    // Empty state
+    if (payments.length === 0) {
+      return res.status(200).json({
+        usedCount: 0,
+        totalAllocations: 0,
+        totalAmountThisMonth: 0,
+        dateStart: effectiveDateStart,
+        dateEnd: effectiveDateEnd,
+        message: `Number ${normalizedNumber} has not been used in this period.`,
+        rows: [],
+        payments: [],
+      });
+    }
 
-//           await tx.discountLog.create({
-//             data: {
-//               studentId: student.id,
-//               studentFeeId: feeRow.id,
-//               amount: relief,
-//               reason: RELIEF_REASON,
-//               month,
-//               year,
-//               approvedBy: authUserId,
-//               verified: true,
-//               verifiedAt: new Date(),
-//               verifiedBy: "system-relief",
-//             },
-//           });
+    // Success
+    return res.status(200).json({
+      usedCount: payments.length,
+      totalAllocations: rows.length,
+      totalAmountThisMonth,
+      dateStart: effectiveDateStart,
+      dateEnd: effectiveDateEnd,
+      message: `Number ${normalizedNumber} was used ${payments.length} time(s).`,
+      rows,
+      payments: grouped,
+    });
+  } catch (error) {
+    console.error("checkPaymentHistoryByNumber error:", error);
+    return res.status(500).json({
+      message: "Internal server error",
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+};
 
-//           // 5) Keep isPaid consistent (optional safety)
-//           // If allocations now cover or exceed the base fee, mark isPaid true
-//           const allocationsSum = await tx.paymentAllocation.aggregate({
-//             where: { studentFeeId: feeRow.id },
-//             _sum: { amount: true },
-//           });
-
-//           const allocated = Number(allocationsSum._sum.amount ?? 0);
-//           const shouldBePaid = allocated >= Number(student.fee || 0);
-
-//           let isPaidAfter = feeRow.isPaid;
-//           if (shouldBePaid && !feeRow.isPaid) {
-//             await tx.studentFee.update({
-//               where: { id: feeRow.id },
-//               data: { isPaid: true },
-//             });
-//             isPaidAfter = true;
-//           }
-
-//           processed++;
-//           totalReliefApplied += relief;
-
-//           details.push({
-//             studentId: student.id,
-//             studentName: student.fullname,
-//             feeId: feeRow.id,
-//             month,
-//             year,
-//             reliefApplied: relief,
-//             paymentId: payment.id,
-//             status: "applied",
-//             isPaidAfter,
-//           });
-//         }
-//       }, { timeout: 20000 }); // allow up to 20s per chunk
-//     }
-
-//     return res.status(200).json({
-//       message: `Applied flat $2 relief to ALL active students with fee > 0 for ${month}/${year} (idempotent; no balance checks).`,
-//       summary: {
-//         totalTargets: targets.length,
-//         processed,
-//         alreadyApplied,
-//         createdFees,
-//         totalReliefApplied: Number(totalReliefApplied.toFixed(2)),
-//       },
-//       details,
-//     });
-//   } catch (error) {
-//     console.error("Error applying $2 relief (global):", error);
-//     return res.status(500).json({
-//       message: "Internal server error while applying relief",
-//       error: error instanceof Error ? error.message : String(error),
-//     });
-//   }
-// };

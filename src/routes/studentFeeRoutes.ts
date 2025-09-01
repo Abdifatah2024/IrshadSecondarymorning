@@ -36,6 +36,7 @@ import {
   addFiveDollarToNoBusStudents,
   getUnpaidFamiliesGroupedByParent,
   applyTwoDollarRelief,
+  checkPaymentHistoryByNumber,
 
 } from "../controller/PaymentContorller";
 import { authenticate } from "../middlewares/authaniticator";
@@ -91,6 +92,7 @@ router.post("/student/add-busless-fee", addFiveDollarToNoBusStudents);
 router.get("/unpaid-families", getUnpaidFamiliesGroupedByParent);
 router.post("/fees/relief", authenticate, applyTwoDollarRelief);
 // Usage: POST /api/fees/relief?month=8&year=2025
+router.post("/check-number-history", checkPaymentHistoryByNumber);
 
 
 
