@@ -4133,6 +4133,81 @@ export const addFiveDollarToNoBusStudents = async (
 // controller/fee/getUnpaidFamiliesGroupedByParent.ts
 
 // Example: src/controllers/unpaidFamily.controller.ts
+// import { joinPhones, feeOrFallback } from "../prisma/utlis/prisma-utils";
+
+// export const getUnpaidFamiliesGroupedByParent = async (
+//   req: Request,
+//   res: Response
+// ) => {
+//   try {
+//     const students = await prisma.student.findMany({
+//       where: {
+//         isdeleted: false,
+//         StudentFee: { some: { isPaid: false } },
+//       },
+//       include: {
+//         StudentFee: {
+//           where: { isPaid: false },
+//           select: { month: true, year: true, student_fee: true },
+//         },
+//         parentUser: { select: { id: true, fullName: true, phoneNumber: true } },
+//         classes: { select: { name: true } },
+//       },
+//     });
+
+//     const families = new Map<number, any>();
+
+//     for (const s of students) {
+//       if (!s.parentUserId) continue;
+
+//       const balance = s.StudentFee.reduce(
+//         (acc, f) => acc + feeOrFallback(f.student_fee, s.fee),
+//         0
+//       );
+
+//       const studentData = {
+//         id: s.id,
+//         fullname: s.fullname,
+//         className: s.classes?.name ?? "",
+//         unpaidFees: s.StudentFee.map((f) => ({
+//           month: f.month,
+//           year: f.year,
+//           student_fee: feeOrFallback(f.student_fee, s.fee).toString(),
+//         })),
+//         balance,
+//       };
+
+//       const fam = families.get(s.parentUserId);
+//       if (fam) {
+//         fam.totalBalance += balance;
+//         fam.students.push(studentData);
+//       } else {
+//         const phones = joinPhones([
+//           s.parentUser?.phoneNumber,
+//           s.phone,
+//           s.phone2,
+//         ]);
+//         families.set(s.parentUserId, {
+//           familyName:
+//             s.familyName ?? s.parentUser?.fullName ?? "Unknown Family",
+//           phones: phones ? phones.split(", ") : [],
+//           totalBalance: balance,
+//           students: [studentData],
+//         });
+//       }
+//     }
+
+//     // only keep families with balance > 0
+//     const result = Array.from(families.values()).filter(
+//       (f) => f.totalBalance > 0
+//     );
+//     return res.json({ families: result });
+//   } catch (e) {
+//     console.error(e);
+//     return res.status(500).json({ message: "Internal server error" });
+//   }
+// };
+
 import { joinPhones, feeOrFallback } from "../prisma/utlis/prisma-utils";
 
 export const getUnpaidFamiliesGroupedByParent = async (
@@ -4206,6 +4281,7 @@ export const getUnpaidFamiliesGroupedByParent = async (
     console.error(e);
     return res.status(500).json({ message: "Internal server error" });
   }
+<<<<<<< HEAD
 };
 
 
@@ -4565,3 +4641,6 @@ export const checkPaymentHistoryByNumber = async (req: Request, res: Response) =
   }
 };
 
+=======
+};
+>>>>>>> b05cb51 (Update)

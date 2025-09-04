@@ -952,12 +952,29 @@ export const getClasses = async (req: Request, res: Response) => {
   }
 };
 // Get Student from Specific Class
+// export const getStudentsByClass = async (req: Request, res: Response) => {
+//   try {
+//     const { classId } = req.params; // Get classId from request parameters
+
+//     const students = await prisma.student.findMany({
+//       where: { classId: parseInt(classId) }, // Ensure classId is an integer if it's a number
+//     });
+
+//     res.status(200).json({ students });
+//   } catch (error) {
+//     console.error("Error fetching students:", error);
+//     res.status(500).json({ message: "Server error while fetching students" });
+//   }
+// };
 export const getStudentsByClass = async (req: Request, res: Response) => {
   try {
     const { classId } = req.params; // Get classId from request parameters
 
     const students = await prisma.student.findMany({
-      where: { classId: parseInt(classId) }, // Ensure classId is an integer if it's a number
+      where: {
+        classId: parseInt(classId, 10), // Ensure classId is parsed as integer
+        isdeleted: false,               // Exclude deleted students
+      },
     });
 
     res.status(200).json({ students });
@@ -966,6 +983,7 @@ export const getStudentsByClass = async (req: Request, res: Response) => {
     res.status(500).json({ message: "Server error while fetching students" });
   }
 };
+
 
 interface attendance {
   studentId: string;
