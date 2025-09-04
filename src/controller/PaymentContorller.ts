@@ -4281,7 +4281,7 @@ export const getUnpaidFamiliesGroupedByParent = async (
     console.error(e);
     return res.status(500).json({ message: "Internal server error" });
   }
-<<<<<<< HEAD
+
 };
 
 
@@ -4641,6 +4641,6 @@ export const checkPaymentHistoryByNumber = async (req: Request, res: Response) =
   }
 };
 
-=======
-};
->>>>>>> b05cb51 (Update)
+
+
+
