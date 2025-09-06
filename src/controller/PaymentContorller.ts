@@ -4208,8 +4208,105 @@ export const addFiveDollarToNoBusStudents = async (
 //   }
 // };
 
-import { joinPhones, feeOrFallback } from "../prisma/utlis/prisma-utils";
+// import { joinPhones, feeOrFallback } from "../prisma/utlis/prisma-utils";
 
+// export const getUnpaidFamiliesGroupedByParent = async (
+//   req: Request,
+//   res: Response
+// ) => {
+//   try {
+//     const students = await prisma.student.findMany({
+//       where: {
+//         isdeleted: false,
+//         StudentFee: { some: { isPaid: false } },
+//       },
+//       include: {
+//         StudentFee: {
+//           where: { isPaid: false },
+//           select: { month: true, year: true, student_fee: true },
+//         },
+//         parentUser: { select: { id: true, fullName: true, phoneNumber: true } },
+//         classes: { select: { name: true } },
+//       },
+//     });
+
+//     const families = new Map<number, any>();
+
+//     for (const s of students) {
+//       if (!s.parentUserId) continue;
+
+//       const balance = s.StudentFee.reduce(
+//         (acc, f) => acc + feeOrFallback(f.student_fee, s.fee),
+//         0
+//       );
+
+//       const studentData = {
+//         id: s.id,
+//         fullname: s.fullname,
+//         className: s.classes?.name ?? "",
+//         unpaidFees: s.StudentFee.map((f) => ({
+//           month: f.month,
+//           year: f.year,
+//           student_fee: feeOrFallback(f.student_fee, s.fee).toString(),
+//         })),
+//         balance,
+//       };
+
+//       const fam = families.get(s.parentUserId);
+//       if (fam) {
+//         fam.totalBalance += balance;
+//         fam.students.push(studentData);
+//       } else {
+//         const phones = joinPhones([
+//           s.parentUser?.phoneNumber,
+//           s.phone,
+//           s.phone2,
+//         ]);
+//         families.set(s.parentUserId, {
+//           familyName:
+//             s.familyName ?? s.parentUser?.fullName ?? "Unknown Family",
+//           phones: phones ? phones.split(", ") : [],
+//           totalBalance: balance,
+//           students: [studentData],
+//         });
+//       }
+//     }
+
+//     // only keep families with balance > 0
+//     const result = Array.from(families.values()).filter(
+//       (f) => f.totalBalance > 0
+//     );
+//     return res.json({ families: result });
+//   } catch (e) {
+//     console.error(e);
+//     return res.status(500).json({ message: "Internal server error" });
+//   }
+
+// };
+
+// src/controllers/familyController.ts
+
+import { toNumber, feeOrFallback, joinPhones, sumNumbers } from "../prisma/utlis/prisma-utils";
+
+/**
+ * GET /api/families/unpaid
+ *
+ * Returns families with students who have unpaid StudentFee rows (isPaid=false),
+ * subtracting per-month discounts (from DiscountLog.amount).
+ *
+ * Response matches frontend format:
+ * {
+ *   families: [{
+ *     familyName: string,
+ *     phones: string[],
+ *     totalBalance: number,
+ *     students: [{
+ *       id, fullname, className, balance,
+ *       unpaidFees: [{ month, year, student_fee }]
+ *     }]
+ *   }]
+ * }
+ */
 export const getUnpaidFamiliesGroupedByParent = async (
   req: Request,
   res: Response
@@ -4218,53 +4315,91 @@ export const getUnpaidFamiliesGroupedByParent = async (
     const students = await prisma.student.findMany({
       where: {
         isdeleted: false,
+        parentUserId: { not: null },
         StudentFee: { some: { isPaid: false } },
       },
-      include: {
+      select: {
+        id: true,
+        fullname: true,
+        fee: true,
+        phone: true,
+        phone2: true,
+        familyName: true,
+        parentUserId: true,
+
+        classes: { select: { name: true } },
+
+        parentUser: { select: { id: true, fullName: true, phoneNumber: true } },
+
         StudentFee: {
           where: { isPaid: false },
           select: { month: true, year: true, student_fee: true },
         },
-        parentUser: { select: { id: true, fullName: true, phoneNumber: true } },
-        classes: { select: { name: true } },
+
+        DiscountLog: {
+          select: { month: true, year: true, amount: true },
+        },
       },
     });
 
-    const families = new Map<number, any>();
+    const families = new Map<
+      number,
+      {
+        familyName: string;
+        phones: string[];
+        totalBalance: number;
+        students: {
+          id: number;
+          fullname: string;
+          className: string;
+          balance: number;
+          unpaidFees: { month: number; year: number; student_fee: string }[];
+        }[];
+      }
+    >();
 
     for (const s of students) {
-      if (!s.parentUserId) continue;
+      // Build map of discounts keyed by "month-year"
+      const discountMap = new Map<string, number>();
+      for (const d of s.DiscountLog) {
+        const key = `${d.month}-${d.year}`;
+        discountMap.set(key, (discountMap.get(key) || 0) + toNumber(d.amount));
+      }
 
-      const balance = s.StudentFee.reduce(
-        (acc, f) => acc + feeOrFallback(f.student_fee, s.fee),
-        0
-      );
+      // Shape unpaid fees exactly for frontend
+      const unpaidFees = s.StudentFee.map((f) => {
+        const key = `${f.month}-${f.year}`;
+        const originalFee = feeOrFallback(f.student_fee, s.fee);
+        const discountApplied = Math.min(originalFee, toNumber(discountMap.get(key)));
+        const netDue = Math.max(0, originalFee - discountApplied);
+
+        return {
+          month: f.month,
+          year: f.year,
+          student_fee: netDue.toString(), // frontend expects string
+        };
+      }).filter((row) => row.student_fee !== "0");
+
+      const balance = sumNumbers(unpaidFees.map((r) => r.student_fee));
+      if (balance <= 0) continue;
 
       const studentData = {
         id: s.id,
         fullname: s.fullname,
         className: s.classes?.name ?? "",
-        unpaidFees: s.StudentFee.map((f) => ({
-          month: f.month,
-          year: f.year,
-          student_fee: feeOrFallback(f.student_fee, s.fee).toString(),
-        })),
+        unpaidFees,
         balance,
       };
 
-      const fam = families.get(s.parentUserId);
-      if (fam) {
+      const parentId = s.parentUserId!;
+      if (families.has(parentId)) {
+        const fam = families.get(parentId)!;
         fam.totalBalance += balance;
         fam.students.push(studentData);
       } else {
-        const phones = joinPhones([
-          s.parentUser?.phoneNumber,
-          s.phone,
-          s.phone2,
-        ]);
-        families.set(s.parentUserId, {
-          familyName:
-            s.familyName ?? s.parentUser?.fullName ?? "Unknown Family",
+        const phones = joinPhones([s.parentUser?.phoneNumber, s.phone, s.phone2]);
+        families.set(parentId, {
+          familyName: s.familyName ?? s.parentUser?.fullName ?? "Unknown Family",
           phones: phones ? phones.split(", ") : [],
           totalBalance: balance,
           students: [studentData],
@@ -4272,17 +4407,17 @@ export const getUnpaidFamiliesGroupedByParent = async (
       }
     }
 
-    // only keep families with balance > 0
-    const result = Array.from(families.values()).filter(
-      (f) => f.totalBalance > 0
-    );
+    const result = Array.from(families.values())
+      .filter((f) => f.totalBalance > 0)
+      .sort((a, b) => b.totalBalance - a.totalBalance);
+
     return res.json({ families: result });
   } catch (e) {
-    console.error(e);
+    console.error("Error fetching unpaid families:", e);
     return res.status(500).json({ message: "Internal server error" });
   }
-
 };
+
 
 
 

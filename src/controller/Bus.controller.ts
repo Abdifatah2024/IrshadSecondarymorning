@@ -640,6 +640,7 @@ export const getBusSalaryAndFeeSummaryDetailedV2 = async (req: Request, res: Res
     res.setHeader("x-calc-version", "schoolFirst_v2");
 
     const buses = await prisma.bus.findMany({
+      
       include: {
         driver: { select: { id: true, fullName: true, salary: true, jobTitle: true } },
         students: {
