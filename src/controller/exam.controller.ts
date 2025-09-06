@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { PrismaClient } from "@prisma/client";
+import { Prisma, PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
@@ -1438,3 +1438,178 @@ export const getParentStudentExamSummary = async (
     });
   }
 };
+
+
+
+type ScoreItem = { subjectId: number; marks: number };
+type ExcelRow = { studentId: number; scores: ScoreItem[] }; // exactly 7
+
+export const registerSevenSubjectsBulkFromExcel = async (req: Request, res: Response) => {
+  try {
+    // Accept JSON or multipart (payload as JSON string)
+    const raw = typeof req.body?.payload === "string" ? JSON.parse(req.body.payload) : req.body;
+
+    let { examId, academicYearId, rows, filename } = raw ?? {};
+    examId = Number(examId);
+    academicYearId = Number(academicYearId);
+
+    if (!Number.isFinite(examId) || !Number.isFinite(academicYearId)) {
+      return res.status(400).json({
+        message: "examId and academicYearId must be numbers.",
+        got: { examId: raw?.examId, academicYearId: raw?.academicYearId },
+      });
+    }
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return res.status(400).json({
+        message: "rows[] must be a non-empty array.",
+        gotType: typeof rows,
+        gotLength: Array.isArray(rows) ? rows.length : undefined,
+      });
+    }
+
+    // ✅ Enforce auth so userid is always a number (NOT null)
+    // @ts-ignore
+    const user = req.user as { useId?: number; userId?: number; id?: number } | undefined;
+    const authUserId = Number(user?.useId ?? user?.userId ?? user?.id);
+    if (!Number.isFinite(authUserId) || authUserId <= 0) {
+      return res.status(401).json({ message: "Unauthorized: valid user id is required." });
+    }
+
+    const exam = await prisma.exam.findUnique({ where: { id: examId } });
+    if (!exam) return res.status(404).json({ message: "Exam not found." });
+
+    const validateMarks = (marks: number): string | null => {
+      if (!Number.isFinite(marks)) return "Marks must be a number.";
+      if (marks < 0) return "Marks must be >= 0.";
+      if (marks > exam.maxMarks) return `Marks cannot exceed ${exam.maxMarks} for this Exam.`;
+      if (exam.type === "MONTHLY" && marks > 20) return "Monthly exam marks must not exceed 20.";
+      if (exam.type === "MIDTERM" && marks > 30) return "Midterm exam marks must not exceed 30.";
+      if (exam.type === "FINAL" && marks > 50) return "Final exam marks must not exceed 50.";
+      return null;
+    };
+
+    // Pre-validate rows and collect ids
+    const allStudentIds = new Set<number>();
+    const allSubjectIds = new Set<number>();
+    const preErrors: Array<{ rowIndex: number; reason: string }> = [];
+
+    rows.forEach((row: any, idx: number) => {
+      const studentId = Number(row?.studentId);
+      if (!Number.isFinite(studentId) || studentId <= 0) {
+        preErrors.push({ rowIndex: idx, reason: "Missing or invalid studentId." });
+        return;
+      }
+      if (!Array.isArray(row?.scores) || row.scores.length !== 7) {
+        preErrors.push({ rowIndex: idx, reason: "Each row must contain exactly 7 scores." });
+        return;
+      }
+      allStudentIds.add(studentId);
+      row.scores.forEach((s: any) => {
+        const subjectId = Number(s?.subjectId);
+        const marks = Number(s?.marks);
+        if (!Number.isFinite(subjectId) || !Number.isFinite(marks)) {
+          preErrors.push({ rowIndex: idx, reason: "scores[] must have numeric subjectId and marks." });
+          return;
+        }
+        allSubjectIds.add(subjectId);
+      });
+    });
+
+    if (preErrors.length === rows.length) {
+      return res.status(400).json({ message: "No valid rows to process.", errors: preErrors });
+    }
+
+    // Load existing once
+    const existing = await prisma.score.findMany({
+      where: {
+        examId,
+        academicYearId,
+        studentId: { in: Array.from(allStudentIds) },
+        subjectId: { in: Array.from(allSubjectIds) },
+      },
+      select: { studentId: true, subjectId: true },
+    });
+    const existingSet = new Set(existing.map((e) => `${e.studentId}-${e.subjectId}`));
+
+    // Build inserts (userid MUST be a number)
+    const creates: Prisma.ScoreCreateManyInput[] = [];
+    type RowResult = { rowIndex: number; studentId: number; created: number; skipped: number; reasons: string[] };
+    const perRowResults: RowResult[] = [];
+
+    rows.forEach((row: any, idx: number) => {
+      const studentId = Number(row?.studentId);
+      if (!Number.isFinite(studentId) || !Array.isArray(row?.scores) || row.scores.length !== 7) {
+        perRowResults.push({
+          rowIndex: idx,
+          studentId: studentId || 0,
+          created: 0,
+          skipped: 7,
+          reasons: [preErrors.find((e) => e.rowIndex === idx)?.reason || "Invalid row"],
+        });
+        return;
+      }
+
+      let created = 0;
+      let skipped = 0;
+      const reasons: string[] = [];
+
+      row.scores.forEach((s: any) => {
+        const subjectId = Number(s?.subjectId);
+        const marks = Number(s?.marks);
+
+        const ruleError = validateMarks(marks);
+        if (ruleError) {
+          skipped++;
+          reasons.push(`subjectId ${subjectId}: ${ruleError}`);
+          return;
+        }
+
+        const key = `${studentId}-${subjectId}`;
+        if (existingSet.has(key)) {
+          skipped++;
+          reasons.push(`subjectId ${subjectId}: duplicate (already exists)`);
+          return;
+        }
+
+        creates.push({
+          studentId,
+          examId,
+          subjectId,
+          marks,
+          userid: authUserId,           // ✅ always a number
+          academicYearId,
+        });
+        existingSet.add(key);
+        created++;
+      });
+
+      perRowResults.push({ rowIndex: idx, studentId, created, skipped, reasons });
+    });
+
+    const [createResult] = await prisma.$transaction([
+      prisma.score.createMany({ data: creates, skipDuplicates: false }),
+    ]);
+
+    const totalCreated = createResult.count;
+    const totalRequested = rows.length * 7;
+    const totalSkipped = totalRequested - totalCreated;
+
+    return res.status(201).json({
+      message: "Excel exam scores processed (7 subjects).",
+      summary: {
+        examId,
+        academicYearId,
+        filename: filename ?? null,
+        studentsProcessed: rows.length,
+        scoresRequested: totalRequested,
+        scoresCreated: totalCreated,
+        scoresSkipped: totalSkipped,
+      },
+      perRowResults,
+    });
+  } catch (error) {
+    console.error("Error bulk-registering exam scores:", error);
+    return res.status(500).json({ message: "Internal server error", error: String(error) });
+  }
+};
+

@@ -1,7 +1,9 @@
 import { Router } from "express";
 // Middleware
 import { authenticate } from "../middlewares/authaniticator"; // ✅ Consider renaming to "authenticate.ts" for clarity
-import upload from "../config/multer";
+// import upload from "../config/multer";
+import { uploadImage, uploadPdf, uploadExcel } from "../config/multer";
+
 
 // Controllers
 import {
@@ -27,8 +29,7 @@ import {
   requestPasswordReset,
   resetPasswordWithToken,
   updateUserRole,
-  uploadPdf,
-  uploadPdfFile,
+   uploadPdfFile,
   getAllDocuments,
   deleteUserDocument,
   GetTeachers,
@@ -46,7 +47,8 @@ import {
   sendResetCode,
   verifyResetCodeAndChangePassword,
 } from "../controller/authController";
-import uploadExcel from "../config/multerExcel";
+import { upload } from "../controller/StudentsRegister";
+
 
 const router = Router();
 

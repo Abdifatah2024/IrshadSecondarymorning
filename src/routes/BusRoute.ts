@@ -6,12 +6,13 @@ import {
   getAllBuses,
   getBusById,
   updateBus,
-  getBusSalaryAndFeeSummaryDetailed,
+
   getAllBusEmployees,
+  getBusSalaryAndFeeSummaryDetailedV2,
 } from "../controller/Bus.controller";
 
 const router = express.Router();
-router.get("/bus-summary", getBusSalaryAndFeeSummaryDetailed);
+router.get("/bus-summary", getBusSalaryAndFeeSummaryDetailedV2);
 router.put("/assign-bus", assignStudentToBus);
 router.post("/bus", createBus);
 router.get("/bus", getAllBuses);

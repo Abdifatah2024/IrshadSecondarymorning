@@ -27,6 +27,7 @@ import {
   updateTenSubjects,
   getStudentExamScores,
   getParentStudentExamSummary,
+  registerSevenSubjectsBulkFromExcel,
 } from "../controller/exam.controller";
 import {
   assignTeacherToClassSubject,
@@ -41,6 +42,8 @@ import {
   updateStudentScore,
   updateTeacherAssignment,
 } from "../controller/teacherScore.controller";
+import { upload } from "../controller/StudentsRegister";
+
 
 const router = Router();
 
@@ -52,6 +55,11 @@ router.get("/list", GetExamType);
 router.post("/createsubject", authenticate, CreateSubjects);
 router.post("/RegisterScore", authenticate, RegisterScore);
 router.post("/registerTenSubjects", authenticate, registerTenSubjects);
+router.post(
+  "/exam-scores/bulk-excel-7-file",
+  authenticate, upload.single("file"),
+  registerSevenSubjectsBulkFromExcel
+);
 
 /* ──────────────── Academic Year ──────────────── */
 router.post("/createAcademic", authenticate, AcademicYear);
