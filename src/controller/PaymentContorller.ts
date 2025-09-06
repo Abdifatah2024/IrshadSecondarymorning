@@ -4286,20 +4286,25 @@ export const addFiveDollarToNoBusStudents = async (
 
 // src/controllers/familyController.ts
 
-import { toNumber, feeOrFallback, joinPhones, sumNumbers } from "../prisma/utlis/prisma-utils";
+import {
+
+  toNumber,
+  feeOrFallback, // still useful elsewhere, but we'll be explicit below
+  joinPhones,
+  sumNumbers,
+} from "../prisma/utlis/prisma-utils";
 
 /**
  * GET /api/families/unpaid
  *
  * Returns families with students who have unpaid StudentFee rows (isPaid=false),
- * subtracting per-month discounts (from DiscountLog.amount).
+ * subtracting per-month discounts (from DiscountLog.amount) **ONLY** when
+ * the monthly fee is not explicitly set (i.e., StudentFee.student_fee is NULL).
  *
- * Response matches frontend format:
+ * Response matches your frontend format:
  * {
  *   families: [{
- *     familyName: string,
- *     phones: string[],
- *     totalBalance: number,
+ *     familyName, phones[], totalBalance,
  *     students: [{
  *       id, fullname, className, balance,
  *       unpaidFees: [{ month, year, student_fee }]
@@ -4331,54 +4336,67 @@ export const getUnpaidFamiliesGroupedByParent = async (
 
         parentUser: { select: { id: true, fullName: true, phoneNumber: true } },
 
+        // Unpaid monthly rows
         StudentFee: {
           where: { isPaid: false },
           select: { month: true, year: true, student_fee: true },
         },
 
+        // Discount rows (may include multiple entries per month)
         DiscountLog: {
           select: { month: true, year: true, amount: true },
         },
       },
     });
 
-    const families = new Map<
-      number,
-      {
-        familyName: string;
-        phones: string[];
-        totalBalance: number;
-        students: {
-          id: number;
-          fullname: string;
-          className: string;
-          balance: number;
-          unpaidFees: { month: number; year: number; student_fee: string }[];
-        }[];
-      }
-    >();
+    type Family = {
+      familyName: string;
+      phones: string[];
+      totalBalance: number;
+      students: {
+        id: number;
+        fullname: string;
+        className: string;
+        balance: number;
+        unpaidFees: { month: number; year: number; student_fee: string }[];
+      }[];
+    };
+
+    const families = new Map<number, Family>();
 
     for (const s of students) {
-      // Build map of discounts keyed by "month-year"
+      // Sum all discounts per (month,year) for this student
       const discountMap = new Map<string, number>();
       for (const d of s.DiscountLog) {
         const key = `${d.month}-${d.year}`;
         discountMap.set(key, (discountMap.get(key) || 0) + toNumber(d.amount));
       }
 
-      // Shape unpaid fees exactly for frontend
-      const unpaidFees = s.StudentFee.map((f) => {
-        const key = `${f.month}-${f.year}`;
-        const originalFee = feeOrFallback(f.student_fee, s.fee);
-        const discountApplied = Math.min(originalFee, toNumber(discountMap.get(key)));
-        const netDue = Math.max(0, originalFee - discountApplied);
+      // Build unpaid fee rows in the exact shape your frontend expects
+      const unpaidFees = s.StudentFee
+        .map((f) => {
+          const key = `${f.month}-${f.year}`;
 
-        return {
-          month: f.month,
-          year: f.year,
-          student_fee: netDue.toString(), // frontend expects string
-        };
-      }).filter((row) => row.student_fee !== "0");
+          const monthlyHasExplicitFee = f.student_fee !== null && f.student_fee !== undefined;
+
+          // If the monthly fee is explicitly set, treat it as the final monthly fee (already adjusted),
+          // so DO NOT subtract DiscountLog again (prevents double-discount).
+          const baseFee = monthlyHasExplicitFee ? toNumber(f.student_fee) : toNumber(s.fee);
+
+          // Only apply discount when monthly fee is NOT explicitly set.
+          const discountToApply = monthlyHasExplicitFee ? 0 : toNumber(discountMap.get(key));
+          const discountApplied = Math.min(baseFee, discountToApply);
+
+          const netDue = Math.max(0, baseFee - discountApplied);
+
+          return {
+            month: f.month,
+            year: f.year,
+            student_fee: netDue.toString(), // frontend expects string
+          };
+        })
+        // Hide fully covered months
+        .filter((row) => row.student_fee !== "0");
 
       const balance = sumNumbers(unpaidFees.map((r) => r.student_fee));
       if (balance <= 0) continue;
