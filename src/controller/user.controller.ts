@@ -328,11 +328,13 @@ export const users = async (_req: Request, res: Response) => {
   }
 };
 
+
+
 export const GetTeachers = async (_req: Request, res: Response) => {
   try {
     const list = await prisma.user.findMany({
       where: {
-        role: "Teacher",
+        role: Role.Teacher,   // ✅ use the enum, not a string
       },
     });
     res.json(list);
@@ -341,6 +343,7 @@ export const GetTeachers = async (_req: Request, res: Response) => {
     res.status(500).json({ message: "Error fetching users" });
   }
 };
+
 
 // ─────────────────────────────────────────────────────
 // Update User
