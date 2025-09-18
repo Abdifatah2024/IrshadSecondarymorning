@@ -23,6 +23,7 @@ import BusRoute from "./routes/BusRoute";
 import EmployeeAttendceRoute from "./routes/employeeAttendanceRoutes";
 import ProfitLogRoute from "./routes/ProfitRoute";
 import LedgerRoute from "./routes/profitLogRoutes";
+import FamilyVoucherRouter from "./routes/familyVoucher.routes";
 
 // import morgan from "morgan";
 const app = express();
@@ -67,6 +68,7 @@ app.use("/api/workplans", workPlanRoutes);
 app.use("/Api/Sms", smsRoutes);
 app.use("/Asset", assetRoutes);
 app.use("/Voucher", paymentVoucherRouter);
+app.use("/Family/Voucher", FamilyVoucherRouter);
 app.use("/api/discount-limit", discountLimitRoutes);
 app.use("/Employee/Attendece", EmployeeAttendceRoute);
 app.use("/profif/log", ProfitLogRoute);

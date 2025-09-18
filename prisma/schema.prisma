@@ -8,59 +8,7 @@ datasource db {
   shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
 }
 
-model User {
-  id                 Int                  @id @default(autoincrement())
-  fullName           String
-  username           String?
-  email              String               @unique
-  phoneNumber        String?              @unique
-  password           String
-  confirmpassword    String
-  createdAt          DateTime             @default(now())
-  updatedAt          DateTime             @updatedAt
-  photoUrl           String?              @default("Null")
-  photoUpdatedAt     DateTime?
-  emailVerified      Boolean?
-  failedAttempts     Int                  @default(0)
-  isLocked           Boolean              @default(false)
-  lockedAt           DateTime?
-  lockCount          Int                  @default(0)
-  correctionLimit    Int                  @default(10)
-  correctionsUsed    Int                  @default(0)
-  resetToken         String?
-  resetTokenExpires  DateTime?
-  mustChangePassword Boolean              @default(false)
-  resetRequestCount  Int                  @default(0)
-  lastResetRequestAt DateTime?
-  role               Role                 @default(USER)
-  Announcement       Announcement[]
-  Attendance         Attendance[]
-  CashLedger         CashLedger[]
-  Discipline         Discipline[]
-  DisciplineComment  DisciplineComment[]
-  approvedDiscounts  DiscountLog[]        @relation("ApprovedDiscounts")
-  DiscountLog        DiscountLog[]
-  Employee           Employee[]
-  EmployeeAdvance    EmployeeAdvance[]
-  Expense            Expense[]
-  Payment            Payment[]
-  ProfitLog          ProfitLog[]
-  Score              Score[]
-  parentStudents     Student[]            @relation("ParentRelation")
-  registeredStudents Student[]            @relation("RegisteredByRelation")
-  students           Student[]            @relation("UserCreatedRelation")
-  DeletedStudents    StudentDeletionLog[] @relation("DeletedBy")
-  StudentFee         StudentFee[]
-  TeacherAssignment  TeacherAssignment[]
-  TeacherClass       TeacherClass[]
-  assignedWorkPlans  WorkPlan[]           @relation("AssignedWorkPlans")
-  reviewedWorkPlans  WorkPlan[]           @relation("ReviewedWorkPlans")
-  WorkPlanComment    WorkPlanComment[]
-  classes            classes[]
-  Document           Document[]
-  notes              note[]
-  tasks              task[]
-}
+
 
 model Document {
   id           Int      @id @default(autoincrement())
@@ -183,18 +131,7 @@ model StudentFee {
   @@unique([studentId, month, year])
 }
 
-model Payment {
-  id          Int                 @id @default(autoincrement())
-  studentId   Int
-  userId      Int
-  amountPaid  Decimal
-  discount    Decimal             @default(0.0)
-  Description String              @default("no")
-  date        DateTime            @default(now())
-  student     Student             @relation(fields: [studentId], references: [id])
-  user        User                @relation(fields: [userId], references: [id])
-  allocations PaymentAllocation[]
-}
+
 
 model DiscountLog {
   id           Int       @id @default(autoincrement())
@@ -564,4 +501,94 @@ enum ExamType {
 enum TransactionType {
   DEPOSIT
   WITHDRAWAL
+}
+
+
+model User {
+  id                 Int                  @id @default(autoincrement())
+  fullName           String
+  username           String?
+  email              String               @unique
+  phoneNumber        String?              @unique
+  password           String
+  confirmpassword    String
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  photoUrl           String?              @default("Null")
+  photoUpdatedAt     DateTime?
+  emailVerified      Boolean?
+  failedAttempts     Int                  @default(0)
+  isLocked           Boolean              @default(false)
+  lockedAt           DateTime?
+  lockCount          Int                  @default(0)
+  correctionLimit    Int                  @default(10)
+  correctionsUsed    Int                  @default(0)
+  resetToken         String?
+  resetTokenExpires  DateTime?
+  mustChangePassword Boolean              @default(false)
+  resetRequestCount  Int                  @default(0)
+  lastResetRequestAt DateTime?
+  role               Role                 @default(USER)
+  Announcement       Announcement[]
+  Attendance         Attendance[]
+  CashLedger         CashLedger[]
+  Discipline         Discipline[]
+  DisciplineComment  DisciplineComment[]
+  approvedDiscounts  DiscountLog[]        @relation("ApprovedDiscounts")
+  DiscountLog        DiscountLog[]
+  Employee           Employee[]
+  EmployeeAdvance    EmployeeAdvance[]
+  Expense            Expense[]
+  Payment            Payment[]
+  ProfitLog          ProfitLog[]
+  Score              Score[]
+  parentStudents     Student[]            @relation("ParentRelation")
+  registeredStudents Student[]            @relation("RegisteredByRelation")
+  students           Student[]            @relation("UserCreatedRelation")
+  DeletedStudents    StudentDeletionLog[] @relation("DeletedBy")
+  StudentFee         StudentFee[]
+  TeacherAssignment  TeacherAssignment[]
+  TeacherClass       TeacherClass[]
+  assignedWorkPlans  WorkPlan[]           @relation("AssignedWorkPlans")
+  reviewedWorkPlans  WorkPlan[]           @relation("ReviewedWorkPlans")
+  WorkPlanComment    WorkPlanComment[]
+  classes            classes[]
+  Document           Document[]
+  notes              note[]
+  tasks              task[]
+  // Add these relation fields
+  parentVouchers     FamilyPaymentVoucher[] @relation("ParentVoucher")
+  createdVouchers    FamilyPaymentVoucher[] @relation("CreatedVoucher")
+}
+
+model Payment {
+  id          Int                 @id @default(autoincrement())
+  studentId   Int
+  userId      Int
+  amountPaid  Decimal
+  discount    Decimal             @default(0.0)
+  Description String              @default("no")
+  date        DateTime            @default(now())
+  student     Student             @relation(fields: [studentId], references: [id])
+  user        User                @relation(fields: [userId], references: [id])
+  allocations PaymentAllocation[]
+  // Add this relation field
+  familyVoucher   FamilyPaymentVoucher? @relation("FamilyVoucherPayments", fields: [familyVoucherId], references: [id])
+  familyVoucherId Int?
+}
+
+model FamilyPaymentVoucher {
+  id           Int        @id @default(autoincrement())
+  voucherNo    String     @unique
+  parentUserId Int
+  method       String     @default("Cash")
+  notes        String?
+  createdAt    DateTime   @default(now())
+  createdById  Int
+
+  parentUser   User       @relation("ParentVoucher", fields: [parentUserId], references: [id])
+  createdBy    User       @relation("CreatedVoucher", fields: [createdById], references: [id])
+  payments     Payment[]  @relation("FamilyVoucherPayments")
+
+  @@index([parentUserId])
 }
