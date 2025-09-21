@@ -14,36 +14,6 @@ CREATE TYPE "public"."ExamType" AS ENUM ('MONTHLY', 'MIDTERM', 'FINAL');
 CREATE TYPE "public"."TransactionType" AS ENUM ('DEPOSIT', 'WITHDRAWAL');
 
 -- CreateTable
-CREATE TABLE "public"."User" (
-    "id" SERIAL NOT NULL,
-    "fullName" TEXT NOT NULL,
-    "username" TEXT,
-    "email" TEXT NOT NULL,
-    "phoneNumber" TEXT,
-    "password" TEXT NOT NULL,
-    "confirmpassword" TEXT NOT NULL,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-    "photoUrl" TEXT DEFAULT 'Null',
-    "photoUpdatedAt" TIMESTAMP(3),
-    "emailVerified" BOOLEAN,
-    "failedAttempts" INTEGER NOT NULL DEFAULT 0,
-    "isLocked" BOOLEAN NOT NULL DEFAULT false,
-    "lockedAt" TIMESTAMP(3),
-    "lockCount" INTEGER NOT NULL DEFAULT 0,
-    "correctionLimit" INTEGER NOT NULL DEFAULT 10,
-    "correctionsUsed" INTEGER NOT NULL DEFAULT 0,
-    "resetToken" TEXT,
-    "resetTokenExpires" TIMESTAMP(3),
-    "mustChangePassword" BOOLEAN NOT NULL DEFAULT false,
-    "resetRequestCount" INTEGER NOT NULL DEFAULT 0,
-    "lastResetRequestAt" TIMESTAMP(3),
-    "role" "public"."Role" NOT NULL DEFAULT 'USER',
-
-    CONSTRAINT "User_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
 CREATE TABLE "public"."documents" (
     "id" SERIAL NOT NULL,
     "title" TEXT NOT NULL,
@@ -152,19 +122,6 @@ CREATE TABLE "public"."StudentFee" (
     "userId" INTEGER,
 
     CONSTRAINT "StudentFee_pkey" PRIMARY KEY ("id")
-);
-
--- CreateTable
-CREATE TABLE "public"."Payment" (
-    "id" SERIAL NOT NULL,
-    "studentId" INTEGER NOT NULL,
-    "userId" INTEGER NOT NULL,
-    "amountPaid" DECIMAL(65,30) NOT NULL,
-    "discount" DECIMAL(65,30) NOT NULL DEFAULT 0.0,
-    "Description" TEXT NOT NULL DEFAULT 'no',
-    "date" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT "Payment_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -509,11 +466,62 @@ CREATE TABLE "public"."CashLedger" (
     CONSTRAINT "CashLedger_pkey" PRIMARY KEY ("id")
 );
 
--- CreateIndex
-CREATE UNIQUE INDEX "User_email_key" ON "public"."User"("email");
+-- CreateTable
+CREATE TABLE "public"."User" (
+    "id" SERIAL NOT NULL,
+    "fullName" TEXT NOT NULL,
+    "username" TEXT,
+    "email" TEXT NOT NULL,
+    "phoneNumber" TEXT,
+    "password" TEXT NOT NULL,
+    "confirmpassword" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "photoUrl" TEXT DEFAULT 'Null',
+    "photoUpdatedAt" TIMESTAMP(3),
+    "emailVerified" BOOLEAN,
+    "failedAttempts" INTEGER NOT NULL DEFAULT 0,
+    "isLocked" BOOLEAN NOT NULL DEFAULT false,
+    "lockedAt" TIMESTAMP(3),
+    "lockCount" INTEGER NOT NULL DEFAULT 0,
+    "correctionLimit" INTEGER NOT NULL DEFAULT 10,
+    "correctionsUsed" INTEGER NOT NULL DEFAULT 0,
+    "resetToken" TEXT,
+    "resetTokenExpires" TIMESTAMP(3),
+    "mustChangePassword" BOOLEAN NOT NULL DEFAULT false,
+    "resetRequestCount" INTEGER NOT NULL DEFAULT 0,
+    "lastResetRequestAt" TIMESTAMP(3),
+    "role" "public"."Role" NOT NULL DEFAULT 'USER',
 
--- CreateIndex
-CREATE UNIQUE INDEX "User_phoneNumber_key" ON "public"."User"("phoneNumber");
+    CONSTRAINT "User_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "public"."Payment" (
+    "id" SERIAL NOT NULL,
+    "studentId" INTEGER NOT NULL,
+    "userId" INTEGER NOT NULL,
+    "amountPaid" DECIMAL(65,30) NOT NULL,
+    "discount" DECIMAL(65,30) NOT NULL DEFAULT 0.0,
+    "Description" TEXT NOT NULL DEFAULT 'no',
+    "date" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "familyVoucherId" INTEGER,
+
+    CONSTRAINT "Payment_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "public"."FamilyPaymentVoucher" (
+    "id" SERIAL NOT NULL,
+    "voucherNo" TEXT NOT NULL,
+    "parentUserId" INTEGER NOT NULL,
+    "method" TEXT NOT NULL DEFAULT 'Cash',
+    "notes" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdById" INTEGER NOT NULL,
+
+    CONSTRAINT "FamilyPaymentVoucher_pkey" PRIMARY KEY ("id")
+);
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Student_studentNumber_key" ON "public"."Student"("studentNumber");
@@ -566,6 +574,18 @@ CREATE UNIQUE INDEX "Asset_assetNumber_key" ON "public"."Asset"("assetNumber");
 -- CreateIndex
 CREATE UNIQUE INDEX "ProfitLog_month_year_key" ON "public"."ProfitLog"("month", "year");
 
+-- CreateIndex
+CREATE UNIQUE INDEX "User_email_key" ON "public"."User"("email");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "User_phoneNumber_key" ON "public"."User"("phoneNumber");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "FamilyPaymentVoucher_voucherNo_key" ON "public"."FamilyPaymentVoucher"("voucherNo");
+
+-- CreateIndex
+CREATE INDEX "FamilyPaymentVoucher_parentUserId_idx" ON "public"."FamilyPaymentVoucher"("parentUserId");
+
 -- AddForeignKey
 ALTER TABLE "public"."documents" ADD CONSTRAINT "documents_uploadedById_fkey" FOREIGN KEY ("uploadedById") REFERENCES "public"."User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
@@ -607,12 +627,6 @@ ALTER TABLE "public"."StudentFee" ADD CONSTRAINT "StudentFee_studentId_fkey" FOR
 
 -- AddForeignKey
 ALTER TABLE "public"."StudentFee" ADD CONSTRAINT "StudentFee_userId_fkey" FOREIGN KEY ("userId") REFERENCES "public"."User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "public"."Payment" ADD CONSTRAINT "Payment_studentId_fkey" FOREIGN KEY ("studentId") REFERENCES "public"."Student"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "public"."Payment" ADD CONSTRAINT "Payment_userId_fkey" FOREIGN KEY ("userId") REFERENCES "public"."User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "public"."DiscountLog" ADD CONSTRAINT "DiscountLog_approvedBy_fkey" FOREIGN KEY ("approvedBy") REFERENCES "public"."User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -733,3 +747,18 @@ ALTER TABLE "public"."ProfitLog" ADD CONSTRAINT "ProfitLog_closedById_fkey" FORE
 
 -- AddForeignKey
 ALTER TABLE "public"."CashLedger" ADD CONSTRAINT "CashLedger_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "public"."User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "public"."Payment" ADD CONSTRAINT "Payment_studentId_fkey" FOREIGN KEY ("studentId") REFERENCES "public"."Student"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "public"."Payment" ADD CONSTRAINT "Payment_userId_fkey" FOREIGN KEY ("userId") REFERENCES "public"."User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "public"."Payment" ADD CONSTRAINT "Payment_familyVoucherId_fkey" FOREIGN KEY ("familyVoucherId") REFERENCES "public"."FamilyPaymentVoucher"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "public"."FamilyPaymentVoucher" ADD CONSTRAINT "FamilyPaymentVoucher_parentUserId_fkey" FOREIGN KEY ("parentUserId") REFERENCES "public"."User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "public"."FamilyPaymentVoucher" ADD CONSTRAINT "FamilyPaymentVoucher_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "public"."User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

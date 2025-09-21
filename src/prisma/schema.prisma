@@ -1,3 +1,571 @@
+// generator client {
+//   provider = "prisma-client-js"
+// }
+
+// datasource db {
+//   provider          = "postgresql"
+//   url               = env("DATABASE_URL")
+//   shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
+// }
+
+// model User {
+//   id                 Int                  @id @default(autoincrement())
+//   fullName           String
+//   username           String?
+//   email              String               @unique
+//   phoneNumber        String?              @unique
+//   password           String
+//   confirmpassword    String
+//   createdAt          DateTime             @default(now())
+//   updatedAt          DateTime             @updatedAt
+//   photoUrl           String?              @default("Null")
+//   photoUpdatedAt     DateTime?
+//   emailVerified      Boolean?
+//   failedAttempts     Int                  @default(0)
+//   isLocked           Boolean              @default(false)
+//   lockedAt           DateTime?
+//   lockCount          Int                  @default(0)
+//   correctionLimit    Int                  @default(10)
+//   correctionsUsed    Int                  @default(0)
+//   resetToken         String?
+//   resetTokenExpires  DateTime?
+//   mustChangePassword Boolean              @default(false)
+//   resetRequestCount  Int                  @default(0)
+//   lastResetRequestAt DateTime?
+//   role               Role                 @default(USER)
+//   Announcement       Announcement[]
+//   Attendance         Attendance[]
+//   CashLedger         CashLedger[]
+//   Discipline         Discipline[]
+//   DisciplineComment  DisciplineComment[]
+//   approvedDiscounts  DiscountLog[]        @relation("ApprovedDiscounts")
+//   DiscountLog        DiscountLog[]
+//   Employee           Employee[]
+//   EmployeeAdvance    EmployeeAdvance[]
+//   Expense            Expense[]
+//   Payment            Payment[]
+//   ProfitLog          ProfitLog[]
+//   Score              Score[]
+//   parentStudents     Student[]            @relation("ParentRelation")
+//   registeredStudents Student[]            @relation("RegisteredByRelation")
+//   students           Student[]            @relation("UserCreatedRelation")
+//   DeletedStudents    StudentDeletionLog[] @relation("DeletedBy")
+//   StudentFee         StudentFee[]
+//   TeacherAssignment  TeacherAssignment[]
+//   TeacherClass       TeacherClass[]
+//   assignedWorkPlans  WorkPlan[]           @relation("AssignedWorkPlans")
+//   reviewedWorkPlans  WorkPlan[]           @relation("ReviewedWorkPlans")
+//   WorkPlanComment    WorkPlanComment[]
+//   classes            classes[]
+//   Document           Document[]
+//   notes              note[]
+//   tasks              task[]
+// }
+
+// model Document {
+//   id           Int      @id @default(autoincrement())
+//   title        String
+//   fileName     String
+//   fileUrl      String
+//   uploadedAt   DateTime @default(now())
+//   uploadedById Int
+//   uploadedBy   User     @relation(fields: [uploadedById], references: [id])
+
+//   @@map("documents")
+// }
+
+// model note {
+//   id           Int      @id @default(autoincrement())
+//   NoteContent  String
+//   created_Date DateTime @default(now())
+//   updated_at   DateTime @updatedAt
+//   userId       Int
+//   user         User     @relation(fields: [userId], references: [id])
+// }
+
+// model task {
+//   id          Int      @id @default(autoincrement())
+//   title       String
+//   description String
+//   due_date    DateTime
+//   completed   Boolean  @default(false)
+//   created_at  DateTime @default(now())
+//   updated_at  DateTime @updatedAt
+//   userId      Int
+//   user        User     @relation(fields: [userId], references: [id])
+// }
+
+// model classes {
+//   id                Int                 @id @default(autoincrement())
+//   name              String
+//   userid            Int
+//   Student           Student[]
+//   TeacherAssignment TeacherAssignment[]
+//   TeacherClass      TeacherClass[]
+//   user              User                @relation(fields: [userid], references: [id])
+// }
+
+// model Student {
+//   id                 Int                  @id @default(autoincrement())
+//   firstname          String
+//   middlename         String
+//   lastname           String
+//   fourtname          String?              @default("Fourt name")
+//   fullname           String
+//   classId            Int
+//   phone              String
+//   phone2             String?
+//   parentEmail        String?
+//   district           String
+//   transfer           Boolean              @default(false)
+//   studentNumber      Int?                 @unique
+//   bus                String?
+//   address            String?
+//   previousSchool     String?
+//   previousSchoolType SchoolType           @default(NOT_SPECIFIC)
+//   motherName         String?
+//   gender             String?
+//   Age                Int
+//   fee                Float
+//   familyName         String?
+//   FreeReason         String?              @default("Fully Sponsored (No bus fee required)")
+//   status             StudentStatus?       @default(ACTIVE)
+//   absentCount        Int?                 @default(0)
+//   lastWarningDate    DateTime?
+//   isdeleted          Boolean              @default(false)
+//   createdAt          DateTime             @default(now())
+//   admissionDate      DateTime             @default(now())
+//   academicYearId     Int?                 @default(1)
+//   rollNumber         String?
+//   registeredById     Int?                 @default(1)
+//   userid             Int?                 @default(1)
+//   parentUserId       Int?
+//   busId              Int?
+//   Attendance         Attendance[]
+//   Discipline         Discipline[]
+//   DiscountLog        DiscountLog[]
+//   Payment            Payment[]
+//   PaymentAllocation  PaymentAllocation[]
+//   Score              Score[]
+//   academicYear       AcademicYear?        @relation(fields: [academicYearId], references: [id])
+//   Bus                Bus?                 @relation(fields: [busId], references: [id])
+//   classes            classes              @relation(fields: [classId], references: [id])
+//   parentUser         User?                @relation("ParentRelation", fields: [parentUserId], references: [id])
+//   registeredBy       User?                @relation("RegisteredByRelation", fields: [registeredById], references: [id])
+//   user               User?                @relation("UserCreatedRelation", fields: [userid], references: [id])
+//   StudentAccount     StudentAccount?
+//   StudentDeletionLog StudentDeletionLog[]
+//   StudentFee         StudentFee[]
+// }
+
+// model StudentDeletionLog {
+//   id            Int      @id @default(autoincrement())
+//   studentId     Int
+//   reason        String
+//   userId        Int?
+//   deletedAt     DateTime @default(now())
+//   Student       Student  @relation(fields: [studentId], references: [id])
+//   deletedByUser User?    @relation("DeletedBy", fields: [userId], references: [id], map: "fk_deleted_by_user_custom")
+// }
+
+// model StudentFee {
+//   id                Int                 @id @default(autoincrement())
+//   studentId         Int
+//   month             Int
+//   year              Int
+//   isPaid            Boolean             @default(false)
+//   student_fee       Decimal?
+//   userId            Int?
+//   PaymentAllocation PaymentAllocation[]
+//   student           Student             @relation(fields: [studentId], references: [id])
+//   User              User?               @relation(fields: [userId], references: [id])
+
+//   @@unique([studentId, month, year])
+// }
+
+// model Payment {
+//   id          Int                 @id @default(autoincrement())
+//   studentId   Int
+//   userId      Int
+//   amountPaid  Decimal
+//   discount    Decimal             @default(0.0)
+//   Description String              @default("no")
+//   date        DateTime            @default(now())
+//   student     Student             @relation(fields: [studentId], references: [id])
+//   user        User                @relation(fields: [userId], references: [id])
+//   allocations PaymentAllocation[]
+// }
+
+// model DiscountLog {
+//   id           Int       @id @default(autoincrement())
+//   studentId    Int
+//   studentFeeId Int
+//   month        Int
+//   year         Int
+//   amount       Float
+//   reason       String
+//   approvedBy   Int
+//   verified     Boolean   @default(false)
+//   verifiedBy   String?
+//   verifiedAt   DateTime?
+//   createdAt    DateTime  @default(now())
+//   userId       Int?
+//   approvedUser User      @relation("ApprovedDiscounts", fields: [approvedBy], references: [id])
+//   student      Student   @relation(fields: [studentId], references: [id])
+//   User         User?     @relation(fields: [userId], references: [id])
+
+//   @@index([studentId])
+//   @@index([studentFeeId])
+//   @@index([month, year])
+// }
+
+// model MonthlyDiscountLimit {
+//   id        Int      @id @default(autoincrement())
+//   month     Int
+//   year      Int
+//   maxLimit  Float
+//   createdAt DateTime @default(now())
+
+//   @@unique([month, year])
+// }
+
+// model Bus {
+//   id       Int       @id @default(autoincrement())
+//   name     String    @unique
+//   route    String?
+//   plate    String?
+//   type     String?
+//   color    String?
+//   seats    Int?
+//   capacity Int?
+//   driverId Int?
+//   driver   Employee? @relation(fields: [driverId], references: [id])
+//   students Student[]
+// }
+
+// model PaymentAllocation {
+//   id           Int        @id @default(autoincrement())
+//   paymentId    Int
+//   studentFeeId Int
+//   amount       Decimal
+//   studentId    Int?
+//   payment      Payment    @relation(fields: [paymentId], references: [id])
+//   studentFee   StudentFee @relation(fields: [studentFeeId], references: [id])
+//   Student      Student?   @relation(fields: [studentId], references: [id])
+// }
+
+// model StudentAccount {
+//   id           Int      @id @default(autoincrement())
+//   studentId    Int      @unique
+//   carryForward Decimal  @default(0.0)
+//   updatedAt    DateTime @updatedAt
+//   student      Student  @relation(fields: [studentId], references: [id])
+// }
+
+// model Attendance {
+//   id          Int       @id @default(autoincrement())
+//   date        DateTime  @default(now())
+//   present     Boolean
+//   remark      String?
+//   studentId   Int
+//   userId      Int
+//   absentCount Int?
+//   created_at  DateTime  @default(now())
+//   callTime    DateTime?
+//   callStatus  String?
+//   callNotes   String?
+//   student     Student   @relation(fields: [studentId], references: [id])
+//   user        User      @relation(fields: [userId], references: [id])
+// }
+
+// model Exam {
+//   id             Int           @id @default(autoincrement())
+//   name           String        @unique
+//   type           ExamType
+//   maxMarks       Int
+//   academicYearId Int?
+//   AcademicYear   AcademicYear? @relation(fields: [academicYearId], references: [id])
+//   scores         Score[]
+// }
+
+// model Subject {
+//   id                Int                 @id @default(autoincrement())
+//   name              String              @unique
+//   academicYearId    Int?
+//   scores            Score[]
+//   AcademicYear      AcademicYear?       @relation(fields: [academicYearId], references: [id])
+//   TeacherAssignment TeacherAssignment[]
+//   TeacherClass      TeacherClass[]
+// }
+
+// model Score {
+//   id              Int          @id @default(autoincrement())
+//   studentId       Int
+//   subjectId       Int
+//   examId          Int
+//   marks           Int
+//   userid          Int
+//   correctionCount Int          @default(0)
+//   correctionLimit Int          @default(10)
+//   lastUpdatedAt   DateTime?
+//   lastUpdatedBy   Int?
+//   academicYearId  Int
+//   AcademicYear    AcademicYear @relation(fields: [academicYearId], references: [id])
+//   exam            Exam         @relation(fields: [examId], references: [id])
+//   student         Student      @relation(fields: [studentId], references: [id])
+//   subject         Subject      @relation(fields: [subjectId], references: [id])
+//   user            User         @relation(fields: [userid], references: [id])
+// }
+
+// model AcademicYear {
+//   id       Int       @id @default(autoincrement())
+//   year     String    @unique
+//   exams    Exam[]
+//   score    Score[]
+//   Student  Student[]
+//   subjects Subject[]
+// }
+
+// model Discipline {
+//   id                Int                 @id @default(autoincrement())
+//   studentId         Int
+//   type              String
+//   description       String
+//   actionTaken       String?
+//   recordedBy        Int
+//   recordedAt        DateTime            @default(now())
+//   isDeleted         Boolean             @default(false)
+//   user              User                @relation(fields: [recordedBy], references: [id])
+//   student           Student             @relation(fields: [studentId], references: [id])
+//   DisciplineComment DisciplineComment[]
+// }
+
+// model Employee {
+//   id                  Int                  @id @default(autoincrement())
+//   fullName            String
+//   dateOfBirth         DateTime
+//   gender              String
+//   nationalId          String               @unique
+//   phone               String
+//   email               String               @unique
+//   address             String
+//   jobTitle            String
+//   dateOfHire          DateTime
+//   education           String
+//   bankAccount         String
+//   salary              Float
+//   appraisalRecords    String?
+//   disciplinaryActions String?
+//   createdById         Int
+//   createdAt           DateTime             @default(now())
+//   updatedAt           DateTime             @updatedAt
+//   Bus                 Bus[]
+//   createdBy           User                 @relation(fields: [createdById], references: [id])
+//   EmployeeAdvance     EmployeeAdvance[]
+//   attendancesReceived EmployeeAttendance[] @relation("MarkedEmployee")
+//   attendancesMarked   EmployeeAttendance[] @relation("MarkedByEmployee")
+// }
+
+// model EmployeeAdvance {
+//   id          Int      @id @default(autoincrement())
+//   employeeId  Int
+//   amount      Float
+//   reason      String?
+//   dateIssued  DateTime @default(now())
+//   month       Int
+//   year        Int
+//   createdById Int
+//   createdBy   User     @relation(fields: [createdById], references: [id])
+//   employee    Employee @relation(fields: [employeeId], references: [id])
+// }
+
+// model Expense {
+//   id            Int      @id @default(autoincrement())
+//   category      String
+//   amount        Float
+//   date          DateTime
+//   description   String?
+//   paymentMethod String
+//   receiptUrl    String?
+//   approvedBy    String?
+//   createdAt     DateTime @default(now())
+//   updatedAt     DateTime @updatedAt
+//   userId        Int
+//   user          User     @relation(fields: [userId], references: [id])
+// }
+
+// model DisciplineComment {
+//   id           Int        @id @default(autoincrement())
+//   content      String
+//   createdAt    DateTime   @default(now())
+//   disciplineId Int
+//   userId       Int
+//   discipline   Discipline @relation(fields: [disciplineId], references: [id])
+//   user         User       @relation(fields: [userId], references: [id])
+// }
+
+// model TeacherAssignment {
+//   id        Int     @id @default(autoincrement())
+//   teacherId Int
+//   subjectId Int
+//   classId   Int
+//   class     classes @relation(fields: [classId], references: [id])
+//   subject   Subject @relation(fields: [subjectId], references: [id])
+//   teacher   User    @relation(fields: [teacherId], references: [id])
+
+//   @@unique([teacherId, subjectId, classId])
+// }
+
+// model TeacherClass {
+//   id        Int     @id @default(autoincrement())
+//   teacherId Int
+//   classId   Int
+//   subjectId Int
+//   class     classes @relation(fields: [classId], references: [id])
+//   subject   Subject @relation(fields: [subjectId], references: [id])
+//   teacher   User    @relation(fields: [teacherId], references: [id])
+
+//   @@unique([teacherId, classId])
+// }
+
+// model Announcement {
+//   id          Int      @id @default(autoincrement())
+//   title       String
+//   message     String
+//   createdAt   DateTime @default(now())
+//   startDate   DateTime
+//   endDate     DateTime
+//   createdById Int
+//   targetRole  Role
+//   createdBy   User     @relation(fields: [createdById], references: [id])
+// }
+
+// model WorkPlan {
+//   id              Int               @id @default(autoincrement())
+//   title           String
+//   description     String
+//   assignedToId    Int
+//   status          String            @default("To Do")
+//   reviewedById    Int?
+//   reviewComments  String?
+//   startDate       DateTime
+//   endDate         DateTime
+//   createdAt       DateTime          @default(now())
+//   updatedAt       DateTime          @updatedAt
+//   assignedTo      User              @relation("AssignedWorkPlans", fields: [assignedToId], references: [id])
+//   reviewedBy      User?             @relation("ReviewedWorkPlans", fields: [reviewedById], references: [id])
+//   WorkPlanComment WorkPlanComment[]
+// }
+
+// model WorkPlanComment {
+//   id         Int      @id @default(autoincrement())
+//   comment    String
+//   status     String   @default("To Do")
+//   workPlanId Int
+//   userId     Int
+//   createdAt  DateTime @default(now())
+//   user       User     @relation(fields: [userId], references: [id])
+//   workPlan   WorkPlan @relation(fields: [workPlanId], references: [id])
+// }
+
+// model Asset {
+//   id               Int      @id @default(autoincrement())
+//   assetNumber      String   @unique
+//   name             String
+//   category         String
+//   purchaseDate     DateTime
+//   purchasePrice    Float
+//   depreciationRate Float
+//   currentValue     Float
+//   purchaseCompany  String?
+//   condition        String
+//   location         String
+//   assignedTo       String?
+//   serialNumber     String?
+//   remarks          String?
+//   createdAt        DateTime @default(now())
+// }
+
+// model EmployeeAttendance {
+//   id         Int      @id @default(autoincrement())
+//   date       DateTime @default(now())
+//   present    Boolean
+//   remark     String?
+//   employeeId Int
+//   markedById Int
+//   createdAt  DateTime @default(now())
+//   employee   Employee @relation("MarkedEmployee", fields: [employeeId], references: [id])
+//   markedBy   Employee @relation("MarkedByEmployee", fields: [markedById], references: [id])
+// }
+
+// model ProfitLog {
+//   id                    Int      @id @default(autoincrement())
+//   month                 Int
+//   year                  Int
+//   closedById            Int
+//   closedAt              DateTime @default(now())
+//   currentIncome         Float
+//   previousIncome        Float
+//   advanceIncome         Float
+//   totalRevenue          Float
+//   totalDiscounts        Float
+//   netRevenue            Float
+//   totalExpenses         Float
+//   totalEmployeeAdvances Float
+//   netIncome             Float
+//   notes                 String?
+//   closedBy              User     @relation(fields: [closedById], references: [id])
+
+//   @@unique([month, year])
+// }
+
+// model CashLedger {
+//   id           Int             @id @default(autoincrement())
+//   date         DateTime        @default(now())
+//   type         TransactionType
+//   source       String
+//   referenceId  Int?
+//   amount       Float
+//   method       String
+//   description  String?
+//   balanceAfter Float
+//   createdById  Int
+//   createdBy    User            @relation(fields: [createdById], references: [id])
+// }
+
+// enum Role {
+//   ADMIN
+//   USER
+//   Teacher
+//   PARENT
+//   PENDING
+//   ACADEMY
+//   ATTENDANCE
+// }
+
+// enum StudentStatus {
+//   ACTIVE
+//   INACTIVE
+//   WARNING
+// }
+
+// enum SchoolType {
+//   PRIVATE
+//   PUBLIC
+//   NOT_SPECIFIC
+// }
+
+// enum ExamType {
+//   MONTHLY
+//   MIDTERM
+//   FINAL
+// }
+
+// enum TransactionType {
+//   DEPOSIT
+//   WITHDRAWAL
+// }
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -6,60 +574,6 @@ datasource db {
   provider          = "postgresql"
   url               = env("DATABASE_URL")
   shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
-}
-
-model User {
-  id                 Int                  @id @default(autoincrement())
-  fullName           String
-  username           String?
-  email              String               @unique
-  phoneNumber        String?              @unique
-  password           String
-  confirmpassword    String
-  createdAt          DateTime             @default(now())
-  updatedAt          DateTime             @updatedAt
-  photoUrl           String?              @default("Null")
-  photoUpdatedAt     DateTime?
-  emailVerified      Boolean?
-  failedAttempts     Int                  @default(0)
-  isLocked           Boolean              @default(false)
-  lockedAt           DateTime?
-  lockCount          Int                  @default(0)
-  correctionLimit    Int                  @default(10)
-  correctionsUsed    Int                  @default(0)
-  resetToken         String?
-  resetTokenExpires  DateTime?
-  mustChangePassword Boolean              @default(false)
-  resetRequestCount  Int                  @default(0)
-  lastResetRequestAt DateTime?
-  role               Role                 @default(USER)
-  Announcement       Announcement[]
-  Attendance         Attendance[]
-  CashLedger         CashLedger[]
-  Discipline         Discipline[]
-  DisciplineComment  DisciplineComment[]
-  approvedDiscounts  DiscountLog[]        @relation("ApprovedDiscounts")
-  DiscountLog        DiscountLog[]
-  Employee           Employee[]
-  EmployeeAdvance    EmployeeAdvance[]
-  Expense            Expense[]
-  Payment            Payment[]
-  ProfitLog          ProfitLog[]
-  Score              Score[]
-  parentStudents     Student[]            @relation("ParentRelation")
-  registeredStudents Student[]            @relation("RegisteredByRelation")
-  students           Student[]            @relation("UserCreatedRelation")
-  DeletedStudents    StudentDeletionLog[] @relation("DeletedBy")
-  StudentFee         StudentFee[]
-  TeacherAssignment  TeacherAssignment[]
-  TeacherClass       TeacherClass[]
-  assignedWorkPlans  WorkPlan[]           @relation("AssignedWorkPlans")
-  reviewedWorkPlans  WorkPlan[]           @relation("ReviewedWorkPlans")
-  WorkPlanComment    WorkPlanComment[]
-  classes            classes[]
-  Document           Document[]
-  notes              note[]
-  tasks              task[]
 }
 
 model Document {
@@ -181,19 +695,6 @@ model StudentFee {
   User              User?               @relation(fields: [userId], references: [id])
 
   @@unique([studentId, month, year])
-}
-
-model Payment {
-  id          Int                 @id @default(autoincrement())
-  studentId   Int
-  userId      Int
-  amountPaid  Decimal
-  discount    Decimal             @default(0.0)
-  Description String              @default("no")
-  date        DateTime            @default(now())
-  student     Student             @relation(fields: [studentId], references: [id])
-  user        User                @relation(fields: [userId], references: [id])
-  allocations PaymentAllocation[]
 }
 
 model DiscountLog {
@@ -564,4 +1065,318 @@ enum ExamType {
 enum TransactionType {
   DEPOSIT
   WITHDRAWAL
+}
+
+// model User {
+//   id                 Int                  @id @default(autoincrement())
+//   fullName           String
+//   username           String?
+//   email              String               @unique
+//   phoneNumber        String?              @unique
+//   password           String
+//   confirmpassword    String
+//   createdAt          DateTime             @default(now())
+//   updatedAt          DateTime             @updatedAt
+//   photoUrl           String?              @default("Null")
+//   photoUpdatedAt     DateTime?
+//   emailVerified      Boolean?
+//   failedAttempts     Int                  @default(0)
+//   isLocked           Boolean              @default(false)
+//   lockedAt           DateTime?
+//   lockCount          Int                  @default(0)
+//   correctionLimit    Int                  @default(10)
+//   correctionsUsed    Int                  @default(0)
+//   resetToken         String?
+//   resetTokenExpires  DateTime?
+//   mustChangePassword Boolean              @default(false)
+//   resetRequestCount  Int                  @default(0)
+//   lastResetRequestAt DateTime?
+//   role               Role                 @default(USER)
+//   Announcement       Announcement[]
+//   Attendance         Attendance[]
+//   CashLedger         CashLedger[]
+//   Discipline         Discipline[]
+//   DisciplineComment  DisciplineComment[]
+//   approvedDiscounts  DiscountLog[]        @relation("ApprovedDiscounts")
+//   DiscountLog        DiscountLog[]
+//   Employee           Employee[]
+//   EmployeeAdvance    EmployeeAdvance[]
+//   Expense            Expense[]
+//   Payment            Payment[]
+//   ProfitLog          ProfitLog[]
+//   Score              Score[]
+//   parentStudents     Student[]            @relation("ParentRelation")
+//   registeredStudents Student[]            @relation("RegisteredByRelation")
+//   students           Student[]            @relation("UserCreatedRelation")
+//   DeletedStudents    StudentDeletionLog[] @relation("DeletedBy")
+//   StudentFee         StudentFee[]
+//   TeacherAssignment  TeacherAssignment[]
+//   TeacherClass       TeacherClass[]
+//   assignedWorkPlans  WorkPlan[]           @relation("AssignedWorkPlans")
+//   reviewedWorkPlans  WorkPlan[]           @relation("ReviewedWorkPlans")
+//   WorkPlanComment    WorkPlanComment[]
+//   classes            classes[]
+//   Document           Document[]
+//   notes              note[]
+//   tasks              task[]
+//   // Add these relation fields
+//   // parentVouchers       FamilyPaymentVoucher[] @relation("ParentVoucher")
+//   // createdVouchers    FamilyPaymentVoucher[] @relation("CreatedVoucher")
+
+//   FamilyPaymentVoucher FamilyPaymentVoucher[] @relation("ParentVoucher", references: [id])
+//   FamilyPaymentVoucher FamilyPaymentVoucher[] @relation("CreatedVoucher", references: [id])
+// }
+
+// model User {
+//   id                 Int       @id @default(autoincrement())
+//   fullName           String
+//   username           String?
+//   email              String    @unique
+//   phoneNumber        String?   @unique
+//   password           String
+//   confirmpassword    String
+//   createdAt          DateTime  @default(now())
+//   updatedAt          DateTime  @updatedAt
+//   photoUrl           String?   @default("Null")
+//   photoUpdatedAt     DateTime?
+//   emailVerified      Boolean?
+//   failedAttempts     Int       @default(0)
+//   isLocked           Boolean   @default(false)
+//   lockedAt           DateTime?
+//   lockCount          Int       @default(0)
+//   correctionLimit    Int       @default(10)
+//   correctionsUsed    Int       @default(0)
+//   resetToken         String?
+//   resetTokenExpires  DateTime?
+//   mustChangePassword Boolean   @default(false)
+//   resetRequestCount  Int       @default(0)
+//   lastResetRequestAt DateTime?
+//   role               Role      @default(USER)
+
+//   // Relations
+//   Announcement       Announcement[]
+//   Attendance         Attendance[]
+//   CashLedger         CashLedger[]
+//   Discipline         Discipline[]
+//   DisciplineComment  DisciplineComment[]
+//   approvedDiscounts  DiscountLog[]        @relation("ApprovedDiscounts")
+//   DiscountLog        DiscountLog[]
+//   Employee           Employee[]
+//   EmployeeAdvance    EmployeeAdvance[]
+//   Expense            Expense[]
+//   Payment            Payment[]
+//   ProfitLog          ProfitLog[]
+//   Score              Score[]
+//   parentStudents     Student[]            @relation("ParentRelation")
+//   registeredStudents Student[]            @relation("RegisteredByRelation")
+//   students           Student[]            @relation("UserCreatedRelation")
+//   DeletedStudents    StudentDeletionLog[] @relation("DeletedBy")
+//   StudentFee         StudentFee[]
+//   TeacherAssignment  TeacherAssignment[]
+//   TeacherClass       TeacherClass[]
+//   assignedWorkPlans  WorkPlan[]           @relation("AssignedWorkPlans")
+//   reviewedWorkPlans  WorkPlan[]           @relation("ReviewedWorkPlans")
+//   WorkPlanComment    WorkPlanComment[]
+//   classes            classes[]
+//   Document           Document[]
+//   notes              note[]
+//   tasks              task[]
+
+//   // ✅ Fixed Relation Names (unique)
+//   parentVouchers       FamilyPaymentVoucher[] @relation("ParentVoucher")
+//   createdVouchers      FamilyPaymentVoucher[] @relation("CreatedVoucher")
+//   FamilyPaymentVoucher FamilyPaymentVoucher[]
+// }
+
+// // model Payment {
+// //   id              Int                   @id @default(autoincrement())
+// //   studentId       Int
+// //   userId          Int
+// //   amountPaid      Decimal
+// //   discount        Decimal               @default(0.0)
+// //   Description     String                @default("no")
+// //   date            DateTime              @default(now())
+// //   student         Student               @relation(fields: [studentId], references: [id])
+// //   user            User                  @relation(fields: [userId], references: [id])
+// //   allocations     PaymentAllocation[]
+// //   // Add this relation field
+// //   familyVoucher   FamilyPaymentVoucher? @relation("FamilyVoucherPayments", fields: [familyVoucherId], references: [id])
+// //   familyVoucherId Int?
+// // }
+
+// model Payment {
+//   id          Int      @id @default(autoincrement())
+//   studentId   Int
+//   userId      Int
+//   amountPaid  Decimal
+//   discount    Decimal  @default(0.0)
+//   Description String   @default("no")
+//   date        DateTime @default(now())
+
+//   // Relations
+//   student     Student             @relation(fields: [studentId], references: [id])
+//   user        User                @relation(fields: [userId], references: [id])
+//   allocations PaymentAllocation[]
+
+//   familyVoucherId Int?
+//   familyVoucher   FamilyPaymentVoucher? @relation("FamilyVoucherPayments", fields: [familyVoucherId], references: [id])
+// }
+
+// // model FamilyPaymentVoucher {
+// //   id           Int      @id @default(autoincrement())
+// //   voucherNo    String   @unique
+// //   parentUserId Int
+// //   method       String   @default("Cash")
+// //   notes        String?
+// //   createdAt    DateTime @default(now())
+// //   createdById  Int
+
+// //   parentUser User      @relation("ParentVoucher", fields: [parentUserId], references: [id])
+// //   createdBy  User      @relation("CreatedVoucher", fields: [createdById], references: [id])
+// //   payments   Payment[] @relation("FamilyVoucherPayments")
+// //   User       User?     @relation(fields: [userId], references: [id])
+// //   userId     Int?
+
+// //   @@index([parentUserId])
+// // }
+
+// model FamilyPaymentVoucher {
+//   id           Int      @id @default(autoincrement())
+//   voucherNo    String   @unique
+//   parentUserId Int
+//   createdById  Int
+//   method       String   @default("Cash")
+//   notes        String?
+//   createdAt    DateTime @default(now())
+//   userId       Int?
+
+//   // Relations
+//   parentUser User      @relation("ParentVoucher", fields: [parentUserId], references: [id])
+//   createdBy  User      @relation("CreatedVoucher", fields: [createdById], references: [id])
+//   payments   Payment[] @relation("FamilyVoucherPayments")
+
+//   // Optional extra relation (if needed elsewhere)
+//   user User? @relation(fields: [userId], references: [id])
+
+//   @@index([parentUserId])
+// }
+
+model User {
+  id                 Int       @id @default(autoincrement())
+  fullName           String
+  username           String?
+  email              String    @unique
+  phoneNumber        String?   @unique
+  password           String
+  confirmpassword    String
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  photoUrl           String?   @default("Null")
+  photoUpdatedAt     DateTime?
+  emailVerified      Boolean?
+  failedAttempts     Int       @default(0)
+  isLocked           Boolean   @default(false)
+  lockedAt           DateTime?
+  lockCount          Int       @default(0)
+  correctionLimit    Int       @default(10)
+  correctionsUsed    Int       @default(0)
+  resetToken         String?
+  resetTokenExpires  DateTime?
+  mustChangePassword Boolean   @default(false)
+  resetRequestCount  Int       @default(0)
+  lastResetRequestAt DateTime?
+  role               Role      @default(USER)
+
+  // Relations
+  Announcement       Announcement[]
+  Attendance         Attendance[]
+  CashLedger         CashLedger[]
+  Discipline         Discipline[]
+  DisciplineComment  DisciplineComment[]
+  approvedDiscounts  DiscountLog[]        @relation("ApprovedDiscounts")
+  DiscountLog        DiscountLog[]
+  Employee           Employee[]
+  EmployeeAdvance    EmployeeAdvance[]
+  Expense            Expense[]
+  Payment            Payment[]
+  ProfitLog          ProfitLog[]
+  Score              Score[]
+  parentStudents     Student[]            @relation("ParentRelation")
+  registeredStudents Student[]            @relation("RegisteredByRelation")
+  students           Student[]            @relation("UserCreatedRelation")
+  DeletedStudents    StudentDeletionLog[] @relation("DeletedBy")
+  StudentFee         StudentFee[]
+  TeacherAssignment  TeacherAssignment[]
+  TeacherClass       TeacherClass[]
+  assignedWorkPlans  WorkPlan[]           @relation("AssignedWorkPlans")
+  reviewedWorkPlans  WorkPlan[]           @relation("ReviewedWorkPlans")
+  WorkPlanComment    WorkPlanComment[]
+  classes            classes[]
+  Document           Document[]
+  notes              note[]
+  tasks              task[]
+
+  // Family Payment Voucher Relations
+  parentVouchers       FamilyPaymentVoucher[] @relation("ParentVoucher")
+  createdVouchers      FamilyPaymentVoucher[] @relation("CreatedVoucher")
+  FamilyPaymentVoucher FamilyPaymentVoucher[]
+}
+
+// model Payment {
+//   id          Int      @id @default(autoincrement())
+//   studentId   Int
+//   userId      Int
+//   amountPaid  Decimal
+//   discount    Decimal  @default(0.0)
+//   Description String   @default("no")
+//   date        DateTime @default(now())
+
+//   // Relations
+//   student     Student             @relation(fields: [studentId], references: [id])
+//   user        User                @relation(fields: [userId], references: [id])
+//   allocations PaymentAllocation[]
+
+//   // Optional: Family Voucher
+//   familyVoucherId Int?
+//   familyVoucher   FamilyPaymentVoucher? @relation("FamilyVoucherPayments", fields: [familyVoucherId], references: [id])
+// }
+
+model Payment {
+  id          Int      @id @default(autoincrement())
+  studentId   Int
+  userId      Int
+  amountPaid  Decimal
+  discount    Decimal  @default(0.0)
+  Description String   @default("no")
+  date        DateTime @default(now())
+
+  // Relations
+  student     Student             @relation(fields: [studentId], references: [id])
+  user        User                @relation(fields: [userId], references: [id])
+  allocations PaymentAllocation[]
+
+  // ✅ Only one field for FamilyPaymentVoucher
+  familyVoucherId Int?
+  familyVoucher   FamilyPaymentVoucher? @relation("FamilyVoucherPayments", fields: [familyVoucherId], references: [id])
+}
+
+model FamilyPaymentVoucher {
+  id           Int      @id @default(autoincrement())
+  voucherNo    String   @unique
+  parentUserId Int
+  createdById  Int
+  method       String   @default("Cash")
+  notes        String?
+  createdAt    DateTime @default(now())
+  userId       Int?
+
+  // Relations
+  parentUser User      @relation("ParentVoucher", fields: [parentUserId], references: [id])
+  createdBy  User      @relation("CreatedVoucher", fields: [createdById], references: [id])
+  payments   Payment[] @relation("FamilyVoucherPayments")
+
+  // Optional extra relation
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([parentUserId])
 }

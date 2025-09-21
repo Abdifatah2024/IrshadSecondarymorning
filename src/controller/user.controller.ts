@@ -14,7 +14,6 @@ import * as XLSX from "xlsx";
 import fs from "fs";
 import validator from "validator";
 
-
 import { sendResetEmail } from "../controller/sendResetEmail";
 // ─────────────────────────────────────────────────────
 // Prisma Client
@@ -186,8 +185,8 @@ export const login = async (req: Request, res: Response) => {
         message: `Account is temporarily locked. Try again in ${remainingSeconds} seconds.`,
       });
     }
-
     const isPasswordValid = bcryptjs.compareSync(password, user.password);
+    console.log(isPasswordValid);
 
     if (!isPasswordValid) {
       const updatedAttempts = user.failedAttempts + 1;
@@ -328,13 +327,11 @@ export const users = async (_req: Request, res: Response) => {
   }
 };
 
-
-
 export const GetTeachers = async (_req: Request, res: Response) => {
   try {
     const list = await prisma.user.findMany({
       where: {
-        role: Role.Teacher,   // ✅ use the enum, not a string
+        role: Role.Teacher, // ✅ use the enum, not a string
       },
     });
     res.json(list);
@@ -343,7 +340,6 @@ export const GetTeachers = async (_req: Request, res: Response) => {
     res.status(500).json({ message: "Error fetching users" });
   }
 };
-
 
 // ─────────────────────────────────────────────────────
 // Update User

@@ -24,6 +24,7 @@ import EmployeeAttendceRoute from "./routes/employeeAttendanceRoutes";
 import ProfitLogRoute from "./routes/ProfitRoute";
 import LedgerRoute from "./routes/profitLogRoutes";
 import FamilyVoucherRouter from "./routes/familyVoucher.routes";
+import { reportsRouter } from "./controller/reports/reports.router";
 
 // import morgan from "morgan";
 const app = express();
@@ -73,6 +74,9 @@ app.use("/api/discount-limit", discountLimitRoutes);
 app.use("/Employee/Attendece", EmployeeAttendceRoute);
 app.use("/profif/log", ProfitLogRoute);
 app.use("/Ledger", LedgerRoute);
+
+app.use("/api/reports", reportsRouter);
+app.use("/api/reports/pdf", reportsRouter);
 app.use(
   "/uploads",
   express.static(path.join(__dirname, "../uploads"), {

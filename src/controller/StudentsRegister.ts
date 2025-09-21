@@ -15,6 +15,216 @@ const upload = multer({
 
 // Create Student
 
+// Helpers
+// const clamp = (val: number, min: number, max: number) =>
+//   Math.max(min, Math.min(max, val));
+
+// const deriveBirthDateFromAge = (age?: number | string | null) => {
+//   const n = Number(age);
+//   if (!Number.isFinite(n) || n <= 0) return null;
+//   const y = new Date().getFullYear() - n;
+//   if (y < 1900 || y > new Date().getFullYear()) return null;
+//   return new Date(y, 0, 1); // Jan 1
+// };
+
+// const busString = (usesBus?: boolean) => (usesBus ? "YES" : "NO");
+
+// helpers you already had
+// const clamp = (val: number, min: number, max: number) =>
+//   Math.max(min, Math.min(max, val));
+
+// const deriveBirthDateFromAge = (age?: number | string | null) => {
+//   const n = Number(age);
+//   if (!Number.isFinite(n) || n <= 0) return null;
+//   const y = new Date().getFullYear() - n;
+//   if (y < 1900 || y > new Date().getFullYear()) return null;
+//   return new Date(y, 0, 1); // Jan 1
+// };
+
+// // NEW: robust normalizer
+// const normalizeBusToString = (
+//   bus: unknown,
+//   usesBus?: unknown
+// ): "YES" | "NO" => {
+//   // prefer explicit usesBus boolean if provided
+//   if (typeof usesBus === "boolean") return usesBus ? "YES" : "NO";
+
+//   // accept legacy `bus` as boolean or string
+//   if (typeof bus === "boolean") return bus ? "YES" : "NO";
+//   if (typeof bus === "string") {
+//     const s = bus.trim().toLowerCase();
+//     if (["yes", "true", "1", "y", "on"].includes(s)) return "YES";
+//     if (["no", "false", "0", "n", "off", ""].includes(s)) return "NO";
+//     // any other non-empty string: keep as-is but coerce to YES/NO conservatively
+//     return "YES"; // or "NO" depending on your policy
+//   }
+//   return "NO";
+// };
+
+// export const createStudent = async (req: Request, res: Response) => {
+//   try {
+//     const {
+//       firstname,
+//       middlename,
+//       lastname,
+//       fourtname,
+//       classId,
+//       phone,
+//       phone2,
+//       bus,
+//       address,
+//       previousSchool,
+//       previousSchoolType,
+//       motherName,
+//       gender,
+//       age,
+//       fee,
+//       district,
+//       transfer,
+//       parentEmail,
+//       academicYearId, // optional
+//     } = req.body;
+
+//     // @ts-ignore
+//     const user = req.user;
+
+//     const fullname = `${firstname} ${middlename} ${lastname} ${
+//       fourtname || ""
+//     }`.trim();
+//     const familyName = ["Reer", middlename, lastname, fourtname]
+//       .filter(Boolean)
+//       .join(" ");
+//     const username = `${lastname.toLowerCase()}_${phone.slice(-4)}`;
+//     const email = `${username}@parent.school.com`;
+
+//     // Check if parent exists or create one
+//     let parentUser = await prisma.user.findFirst({
+//       where: {
+//         phoneNumber: phone,
+//         role: "PARENT",
+//       },
+//     });
+
+//     if (!parentUser) {
+//       const hashedPassword = await bcryptjs.hash(phone, 10);
+//       parentUser = await prisma.user.create({
+//         data: {
+//           fullName: motherName || `${firstname} ${lastname} Parent`,
+//           username,
+//           email,
+//           phoneNumber: phone,
+//           password: hashedPassword,
+//           confirmpassword: hashedPassword,
+//           role: "PARENT",
+//         },
+//       });
+//     }
+
+//     // Generate roll number like STU-2025-0001
+//     const studentCount = await prisma.student.count();
+//     const year = new Date().getFullYear();
+//     const rollNumber = `STU-${year}-${String(studentCount + 1).padStart(
+//       4,
+//       "0"
+//     )}`;
+
+//     const result = await prisma.$transaction(async (tx) => {
+//       const newStudent = await tx.student.create({
+//         data: {
+//           firstname,
+//           middlename,
+//           lastname,
+//           fourtname,
+//           fullname,
+//           familyName,
+//           phone,
+//           phone2,
+//           bus,
+//           address,
+//           previousSchool,
+//           previousSchoolType: previousSchoolType || "NOT_SPECIFIC",
+//           motherName,
+//           gender,
+//           Age: Number(age),
+//           fee: Number(fee),
+//           district,
+//           transfer: Boolean(transfer),
+//           parentEmail,
+//           rollNumber,
+//           academicYearId: academicYearId || 1,
+//           registeredById: user.useId,
+//           userid: user.useId,
+//           parentUserId: parentUser.id,
+//           classId: Number(classId), // ✅ correct usage of relation
+//         },
+//       });
+
+//       const today = new Date();
+
+//       await tx.studentFee.create({
+//         data: {
+//           studentId: newStudent.id,
+//           month: today.getMonth() + 1,
+//           year: today.getFullYear(),
+//           isPaid: false,
+//         },
+//       });
+
+//       await tx.studentAccount.create({
+//         data: {
+//           studentId: newStudent.id,
+//           carryForward: 0,
+//         },
+//       });
+
+//       return newStudent;
+//     });
+
+//     res.status(201).json({
+//       message: "Student created with initial fee generated successfully",
+//       student: result,
+//       parentAccount: {
+//         email: parentUser.email,
+//         username: parentUser.username,
+//         password: phone,
+//         parentId: parentUser.id,
+//       },
+//     });
+//   } catch (error) {
+//     console.error("Error creating student:", error);
+//     res.status(500).json({
+//       message: "Server error while creating student",
+//       error: error instanceof Error ? error.message : "Unknown error",
+//     });
+//   }
+// };
+
+const clamp = (val: number, min: number, max: number) =>
+  Math.max(min, Math.min(max, val));
+
+const deriveBirthDateFromAge = (age?: number | string | null) => {
+  const n = Number(age);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  const y = new Date().getFullYear() - n;
+  if (y < 1900 || y > new Date().getFullYear()) return null;
+  return new Date(y, 0, 1);
+};
+
+const normalizeBusToString = (
+  bus: unknown,
+  usesBus?: unknown
+): "YES" | "NO" => {
+  if (typeof usesBus === "boolean") return usesBus ? "YES" : "NO";
+  if (typeof bus === "boolean") return bus ? "YES" : "NO";
+  if (typeof bus === "string") {
+    const s = bus.trim().toLowerCase();
+    if (["yes", "true", "1", "y", "on"].includes(s)) return "YES";
+    if (["no", "false", "0", "n", "off", ""].includes(s)) return "NO";
+    return "YES";
+  }
+  return "NO";
+};
+
 export const createStudent = async (req: Request, res: Response) => {
   try {
     const {
@@ -51,14 +261,10 @@ export const createStudent = async (req: Request, res: Response) => {
     const username = `${lastname.toLowerCase()}_${phone.slice(-4)}`;
     const email = `${username}@parent.school.com`;
 
-    // Check if parent exists or create one
+    // ensure parent user
     let parentUser = await prisma.user.findFirst({
-      where: {
-        phoneNumber: phone,
-        role: "PARENT",
-      },
+      where: { phoneNumber: phone, role: "PARENT" },
     });
-
     if (!parentUser) {
       const hashedPassword = await bcryptjs.hash(phone, 10);
       parentUser = await prisma.user.create({
@@ -74,13 +280,56 @@ export const createStudent = async (req: Request, res: Response) => {
       });
     }
 
-    // Generate roll number like STU-2025-0001
+    // roll number
     const studentCount = await prisma.student.count();
     const year = new Date().getFullYear();
     const rollNumber = `STU-${year}-${String(studentCount + 1).padStart(
       4,
       "0"
     )}`;
+
+    // ✅ bus must be a STRING ("YES"/"NO")
+    const busStr = normalizeBusToString(bus, (req.body as any)?.usesBus);
+
+    // ✅ Resolve a valid academicYearId to prevent P2003
+    let targetAcademicYearId: number | null =
+      Number(academicYearId) && Number.isFinite(Number(academicYearId))
+        ? Number(academicYearId)
+        : null;
+
+    if (targetAcademicYearId) {
+      const exists = await prisma.academicYear.findUnique({
+        where: { id: targetAcademicYearId },
+      });
+      if (!exists) targetAcademicYearId = null;
+    }
+    if (!targetAcademicYearId) {
+      // try an active year (adjust the field if your schema uses a different one)
+      const active = await prisma.academicYear.findFirst({
+        where: {
+          /* e.g., isActive: true */
+        },
+        orderBy: { id: "desc" },
+      });
+      if (active) targetAcademicYearId = active.id;
+    }
+    if (!targetAcademicYearId) {
+      // last resort: pick any academic year
+      const anyYear = await prisma.academicYear.findFirst({
+        orderBy: { id: "asc" },
+      });
+      if (anyYear) targetAcademicYearId = anyYear.id;
+    }
+    if (!targetAcademicYearId) {
+      return res.status(400).json({
+        message:
+          "No AcademicYear found. Create an academic year first or provide a valid academicYearId.",
+      });
+    }
+
+    // (optional) you may also validate classId exists
+    // const cls = await prisma.classes.findUnique({ where: { id: Number(classId) } });
+    // if (!cls) return res.status(400).json({ message: "Invalid classId." });
 
     const result = await prisma.$transaction(async (tx) => {
       const newStudent = await tx.student.create({
@@ -93,7 +342,7 @@ export const createStudent = async (req: Request, res: Response) => {
           familyName,
           phone,
           phone2,
-          bus,
+          bus: busStr,
           address,
           previousSchool,
           previousSchoolType: previousSchoolType || "NOT_SPECIFIC",
@@ -105,16 +354,15 @@ export const createStudent = async (req: Request, res: Response) => {
           transfer: Boolean(transfer),
           parentEmail,
           rollNumber,
-          academicYearId: academicYearId || 1,
+          academicYearId: targetAcademicYearId, // ✅ guaranteed valid
           registeredById: user.useId,
           userid: user.useId,
           parentUserId: parentUser.id,
-          classId: Number(classId), // ✅ correct usage of relation
+          classId: Number(classId),
         },
       });
 
       const today = new Date();
-
       await tx.studentFee.create({
         data: {
           studentId: newStudent.id,
@@ -973,7 +1221,7 @@ export const getStudentsByClass = async (req: Request, res: Response) => {
     const students = await prisma.student.findMany({
       where: {
         classId: parseInt(classId, 10), // Ensure classId is parsed as integer
-        isdeleted: false,               // Exclude deleted students
+        isdeleted: false, // Exclude deleted students
       },
     });
 
@@ -983,7 +1231,6 @@ export const getStudentsByClass = async (req: Request, res: Response) => {
     res.status(500).json({ message: "Server error while fetching students" });
   }
 };
-
 
 interface attendance {
   studentId: string;
