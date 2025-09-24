@@ -25,6 +25,10 @@ import ProfitLogRoute from "./routes/ProfitRoute";
 import LedgerRoute from "./routes/profitLogRoutes";
 import FamilyVoucherRouter from "./routes/familyVoucher.routes";
 import { reportsRouter } from "./controller/reports/reports.router";
+import familyVouchers from "./routes/voucher/familyVouchers";
+import reports from "./routes/reports";
+import reportCatalog from "./routes/reportCatalog";
+import reportRun from "./routes/reportRun";
 
 // import morgan from "morgan";
 const app = express();
@@ -77,6 +81,11 @@ app.use("/Ledger", LedgerRoute);
 
 app.use("/api/reports", reportsRouter);
 app.use("/api/reports/pdf", reportsRouter);
+app.use("/api/family-vouchers", familyVouchers);
+
+app.use("/reports", reports);
+app.use("/reports", reportCatalog);
+app.use("/reports", reportRun);
 app.use(
   "/uploads",
   express.static(path.join(__dirname, "../uploads"), {

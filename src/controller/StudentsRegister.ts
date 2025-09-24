@@ -235,6 +235,7 @@ export const createStudent = async (req: Request, res: Response) => {
       classId,
       phone,
       phone2,
+      STUDID,
       bus,
       address,
       previousSchool,
@@ -288,6 +289,27 @@ export const createStudent = async (req: Request, res: Response) => {
       "0"
     )}`;
 
+    // const studentSID = await prisma.student.count();
+    // // const year = new Date().getFullYear();
+    // const SUDID = `STU-${year}-${String(studentCount + 1).padStart(
+    //   1,
+    //   "0"
+    // )}`;
+
+    const lastStudent = await prisma.student.findFirst({
+      orderBy: {
+        STUDID: "desc",
+      },
+      select: {
+        STUDID: true,
+      },
+    });
+    // Start from 10000 if no students exist
+    const lastId = lastStudent?.STUDID || 9999;
+
+    // Add 1 to generate the new STUDID
+    const newStudentID = lastId + 1;
+
     // ✅ bus must be a STRING ("YES"/"NO")
     const busStr = normalizeBusToString(bus, (req.body as any)?.usesBus);
 
@@ -330,6 +352,7 @@ export const createStudent = async (req: Request, res: Response) => {
     // (optional) you may also validate classId exists
     // const cls = await prisma.classes.findUnique({ where: { id: Number(classId) } });
     // if (!cls) return res.status(400).json({ message: "Invalid classId." });
+    console.log(busStr);
 
     const result = await prisma.$transaction(async (tx) => {
       const newStudent = await tx.student.create({
@@ -340,6 +363,7 @@ export const createStudent = async (req: Request, res: Response) => {
           fourtname,
           fullname,
           familyName,
+          STUDID: newStudentID,
           phone,
           phone2,
           bus: busStr,
@@ -618,7 +642,9 @@ export const createMultipleStudentsByExcel = async (
         classId,
         phone,
         phone2,
+        STUDID,
         bus,
+        buss,
         address,
         previousSchool,
         previousSchoolType,
@@ -642,6 +668,7 @@ export const createMultipleStudentsByExcel = async (
         !phone ||
         !gender ||
         !Age ||
+        !STUDID ||
         fee === undefined ||
         fee === null
       ) {
@@ -654,7 +681,7 @@ export const createMultipleStudentsByExcel = async (
       }
 
       const phoneStr = String(phone).trim();
-      const busStr = bus ? String(bus).trim() : null;
+      const busStr = buss ? String(buss).trim() : null;
       const phone2Str = phone2 ? String(phone2).trim() : null;
       const fullName = `${firstname} ${middlename || ""} ${lastname} ${
         fourtname || ""
@@ -694,6 +721,8 @@ export const createMultipleStudentsByExcel = async (
           "0"
         )}`;
 
+        const busInputNormalized = (buss || "").toLowerCase().trim();
+        const hasBus = busInputNormalized === "yes";
         // ✅ Create student and related data
         const student = await prisma.$transaction(async (tx) => {
           const newStudent = await tx.student.create({
@@ -707,6 +736,8 @@ export const createMultipleStudentsByExcel = async (
               classId: Number(classId),
               phone: phoneStr,
               phone2: phone2Str,
+              STUDID,
+              buss: hasBus ? busStr : null,
               bus: busStr,
               address,
               previousSchool,

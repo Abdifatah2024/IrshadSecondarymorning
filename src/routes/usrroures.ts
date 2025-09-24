@@ -4,7 +4,6 @@ import { authenticate } from "../middlewares/authaniticator"; // ✅ Consider re
 // import upload from "../config/multer";
 import { uploadImage, uploadPdf, uploadExcel } from "../config/multer";
 
-
 // Controllers
 import {
   login,
@@ -29,7 +28,7 @@ import {
   requestPasswordReset,
   resetPasswordWithToken,
   updateUserRole,
-   uploadPdfFile,
+  uploadPdfFile,
   getAllDocuments,
   deleteUserDocument,
   GetTeachers,
@@ -48,7 +47,6 @@ import {
   verifyResetCodeAndChangePassword,
 } from "../controller/authController";
 import { upload } from "../controller/StudentsRegister";
-
 
 const router = Router();
 

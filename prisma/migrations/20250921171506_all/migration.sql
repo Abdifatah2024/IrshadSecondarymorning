@@ -515,10 +515,11 @@ CREATE TABLE "public"."FamilyPaymentVoucher" (
     "id" SERIAL NOT NULL,
     "voucherNo" TEXT NOT NULL,
     "parentUserId" INTEGER NOT NULL,
+    "createdById" INTEGER NOT NULL,
     "method" TEXT NOT NULL DEFAULT 'Cash',
     "notes" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "createdById" INTEGER NOT NULL,
+    "user_id" INTEGER,
 
     CONSTRAINT "FamilyPaymentVoucher_pkey" PRIMARY KEY ("id")
 );
@@ -756,6 +757,9 @@ ALTER TABLE "public"."Payment" ADD CONSTRAINT "Payment_userId_fkey" FOREIGN KEY 
 
 -- AddForeignKey
 ALTER TABLE "public"."Payment" ADD CONSTRAINT "Payment_familyVoucherId_fkey" FOREIGN KEY ("familyVoucherId") REFERENCES "public"."FamilyPaymentVoucher"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "public"."FamilyPaymentVoucher" ADD CONSTRAINT "FamilyPaymentVoucher_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "public"."User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "public"."FamilyPaymentVoucher" ADD CONSTRAINT "FamilyPaymentVoucher_parentUserId_fkey" FOREIGN KEY ("parentUserId") REFERENCES "public"."User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

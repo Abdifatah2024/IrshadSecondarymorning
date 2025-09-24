@@ -37,7 +37,6 @@ import {
   getUnpaidFamiliesGroupedByParent,
   applyTwoDollarRelief,
   checkPaymentHistoryByNumber,
-
 } from "../controller/PaymentContorller";
 import { authenticate } from "../middlewares/authaniticator";
 import { getNegativeFeeStudents } from "../controller/paymentVoucher.controller";
@@ -78,6 +77,7 @@ router.get("/income/today", getTodayIncome);
 router.get("/Classfee/status", getStudentsWithUnpaidFeeMonthly);
 router.get("/family/balance", getFamilyBalanceByPhone);
 router.post("/pay/month", authenticate, payStudentMonth);
+// waa halka lagu bixinay
 router.post("/pay-full-month", authenticate, payFullForMonthByPhone);
 router.post("/check-payment-number", checkIfPaymentNumberAlreadyUsed);
 router.post("/payment/check-last-used-number", checkLastPaymentByNumber);
@@ -93,7 +93,5 @@ router.get("/unpaid-families", getUnpaidFamiliesGroupedByParent);
 router.post("/fees/relief", authenticate, applyTwoDollarRelief);
 // Usage: POST /api/fees/relief?month=8&year=2025
 router.post("/check-number-history", checkPaymentHistoryByNumber);
-
-
 
 export default router;

@@ -1814,6 +1814,8 @@ model Student {
   district           String
   transfer           Boolean              @default(false)
   studentNumber      Int?                 @unique
+  STUDID             Int?                 @unique
+  buss               String?
   bus                String?
   address            String?
   previousSchool     String?
@@ -2501,6 +2503,8 @@ model User {
   parentVouchers       FamilyPaymentVoucher[] @relation("ParentVoucher")
   createdVouchers      FamilyPaymentVoucher[] @relation("CreatedVoucher")
   FamilyPaymentVoucher FamilyPaymentVoucher[]
+  LoginOtp             LoginOtp[]
+  EmailVerification    EmailVerification[]
 }
 
 // model Payment {
@@ -2562,6 +2566,29 @@ model Payment {
 //   @@index([parentUserId])
 // }
 
+// model FamilyPaymentVoucher {
+//   id           Int      @id @default(autoincrement())
+//   voucherNo    String   @unique
+//   parentUserId Int
+//   createdById  Int
+//   method       String   @default("Cash")
+//   notes        String?
+//   createdAt    DateTime @default(now())
+//   userId       Int?
+
+//   // Relations
+//   parentUser User      @relation("ParentVoucher", fields: [parentUserId], references: [id])
+//   createdBy  User      @relation("CreatedVoucher", fields: [createdById], references: [id])
+//   payments   Payment[] @relation("FamilyVoucherPayments")
+
+//   // Optional extra relation
+//   user   User? @relation(fields: [userId], references: [id])
+//   // userId Int?
+//   // user   User? @relation(fields: [userId], references: [id])
+
+//   @@index([parentUserId])
+// }
+
 model FamilyPaymentVoucher {
   id           Int      @id @default(autoincrement())
   voucherNo    String   @unique
@@ -2570,15 +2597,49 @@ model FamilyPaymentVoucher {
   method       String   @default("Cash")
   notes        String?
   createdAt    DateTime @default(now())
-  userId       Int?
 
-  // Relations
+  userId Int?  @map("user_id")
+  user   User? @relation(fields: [userId], references: [id])
+
   parentUser User      @relation("ParentVoucher", fields: [parentUserId], references: [id])
   createdBy  User      @relation("CreatedVoucher", fields: [createdById], references: [id])
   payments   Payment[] @relation("FamilyVoucherPayments")
 
-  // Optional extra relation
-  user User? @relation(fields: [userId], references: [id])
-
   @@index([parentUserId])
+  @@map("FamilyPaymentVoucher") // optional if your table name differs
+}
+
+enum OtpChannel {
+  EMAIL
+  SMS
+}
+
+model LoginOtp {
+  id          String     @id @default(cuid())
+  userId      Int
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  channel     OtpChannel @default(EMAIL)
+  destination String
+  codeHash    String
+  attempts    Int        @default(0)
+  maxAttempts Int        @default(5)
+  expiresAt   DateTime
+  consumedAt  DateTime?
+  createdAt   DateTime   @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model EmailVerification {
+  id        String    @id @default(cuid())
+  userId    Int
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
 }
