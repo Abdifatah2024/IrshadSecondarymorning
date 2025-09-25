@@ -3481,24 +3481,186 @@ export const updatePayment = async (req: Request, res: Response) => {
 const toNum = (v: Prisma.Decimal | number | null | undefined) =>
   v == null ? 0 : Number(v);
 
+// export const getFamilyBalanceByPhone = async (req: Request, res: Response) => {
+//   try {
+//     const phone = req.query.phone as string | undefined;
+//     const familyName = req.query.familyName as string | undefined;
+//     const STUDID = req.query.familyName as string | undefined;
+
+//     if ((!phone && !familyName) || !STUDID) {
+//       return res
+//         .status(400)
+//         .json({ message: "Phone or familyName ,STUDENT IDis required" });
+//     }
+
+//     // 1) Resolve parent
+
+//     let parent = phone
+//       ? await prisma.user.findFirst({
+//           where: { phoneNumber: phone, role: "PARENT" },
+//         })
+//       : null;
+
+//     if (!parent && familyName) {
+//       const anyStudent = await prisma.student.findFirst({
+//         where: { familyName, isdeleted: false },
+//         select: { parentUserId: true },
+//       });
+//       if (anyStudent?.parentUserId) {
+//         parent = await prisma.user.findUnique({
+//           where: { id: anyStudent.parentUserId },
+//         });
+//       }
+//     }
+
+//     if (!parent) {
+//       return res.status(404).json({ message: "Parent not found" });
+//     }
+
+//     // 2) Students
+//     const students = await prisma.student.findMany({
+//       where: { parentUserId: parent.id, isdeleted: false },
+//       select: { id: true, fullname: true, fee: true },
+//     });
+
+//     if (!students.length) {
+//       return res
+//         .status(404)
+//         .json({ message: "No students found for this parent" });
+//     }
+
+//     const studentIds = students.map((s) => s.id);
+
+//     // 3) All unpaid fee rows (note: using student_fee field)
+//     const unpaidFees = await prisma.studentFee.findMany({
+//       where: { studentId: { in: studentIds }, isPaid: false },
+//       select: {
+//         id: true,
+//         studentId: true,
+//         month: true,
+//         year: true,
+//         isPaid: true,
+//         student_fee: true, // <— this is your per-row fee amount
+//       },
+//       orderBy: [{ year: "asc" }, { month: "asc" }],
+//     });
+
+//     if (!unpaidFees.length) {
+//       return res.status(200).json({
+//         parentName: parent.fullName,
+//         phone: parent.phoneNumber,
+//         totalFamilyBalance: 0,
+//         students: students.map((s) => ({
+//           studentId: s.id,
+//           fullname: s.fullname,
+//           balance: 0,
+//           months: [],
+//         })),
+//       });
+//     }
+
+//     const feeIds = unpaidFees.map((f) => f.id);
+
+//     // 4) Allocations
+//     const allocationSums = await prisma.paymentAllocation.groupBy({
+//       by: ["studentFeeId"],
+//       where: { studentFeeId: { in: feeIds } },
+//       _sum: { amount: true },
+//     });
+
+//     const paidMap = new Map<number, number>(
+//       allocationSums.map((a) => [a.studentFeeId, toNum(a._sum.amount)])
+//     );
+
+//     // student fallback (if a fee row has null student_fee)
+//     const studentFeeFallback = new Map<number, number>(
+//       students.map((s) => [s.id, toNum(s.fee as unknown as number)]) // if s.fee is Decimal, wrap with toNum
+//     );
+
+//     type MonthDue = { month: number; year: number; due: number };
+//     const byStudent: Record<
+//       number,
+//       { fullname: string; months: MonthDue[]; total: number }
+//     > = {};
+
+//     for (const fee of unpaidFees) {
+//       // Prefer per-row student_fee, fallback to student's base fee
+//       const perRow = toNum(fee.student_fee);
+//       const fallback = studentFeeFallback.get(fee.studentId) || 0;
+//       const rowAmount = perRow > 0 ? perRow : fallback;
+
+//       const paid = paidMap.get(fee.id) || 0;
+//       const due = Math.max(rowAmount - paid, 0);
+
+//       if (due <= 0) continue;
+
+//       if (!byStudent[fee.studentId]) {
+//         const s = students.find((x) => x.id === fee.studentId)!;
+//         byStudent[fee.studentId] = {
+//           fullname: s.fullname,
+//           months: [],
+//           total: 0,
+//         };
+//       }
+//       byStudent[fee.studentId].months.push({
+//         month: fee.month,
+//         year: fee.year,
+//         due,
+//       });
+//       byStudent[fee.studentId].total += due;
+//     }
+
+//     let familyBalance = 0;
+//     const studentBalances = students.map((s) => {
+//       const item = byStudent[s.id];
+//       const balance = item?.total ?? 0;
+//       familyBalance += balance;
+//       return {
+//         studentId: s.id,
+//         fullname: s.fullname,
+//         balance,
+//         months: item?.months ?? [],
+//       };
+//     });
+
+//     return res.status(200).json({
+//       parentName: parent.fullName,
+//       phone: parent.phoneNumber,
+//       totalFamilyBalance: familyBalance,
+//       students: studentBalances,
+//     });
+//   } catch (error) {
+//     console.error("Error getting family balance:", error);
+//     return res.status(500).json({
+//       message: "Server error",
+//       error: error instanceof Error ? error.message : "Unknown error",
+//     });
+//   }
+// };
+
+// get with student STUDID
+
 export const getFamilyBalanceByPhone = async (req: Request, res: Response) => {
   try {
     const phone = req.query.phone as string | undefined;
     const familyName = req.query.familyName as string | undefined;
+    const STUDID = req.query.STUDID as number | undefined; // Fixed variable name to match query param
 
-    if (!phone && !familyName) {
+    // Validate input: Require phone, familyName, or STUDID
+    if (!phone && !familyName && !STUDID) {
       return res
         .status(400)
-        .json({ message: "Phone or familyName is required" });
+        .json({ message: "Phone, familyName, or STUDID is required" });
     }
 
-    // 1) Resolve parent
+    // 1) Resolve parent user
     let parent = phone
       ? await prisma.user.findFirst({
           where: { phoneNumber: phone, role: "PARENT" },
         })
       : null;
 
+    // If parent isn't found by phone, try finding by familyName
     if (!parent && familyName) {
       const anyStudent = await prisma.student.findFirst({
         where: { familyName, isdeleted: false },
@@ -3511,25 +3673,52 @@ export const getFamilyBalanceByPhone = async (req: Request, res: Response) => {
       }
     }
 
+    // If parent is not found by phone or familyName, return error
     if (!parent) {
       return res.status(404).json({ message: "Parent not found" });
     }
 
-    // 2) Students
-    const students = await prisma.student.findMany({
-      where: { parentUserId: parent.id, isdeleted: false },
-      select: { id: true, fullname: true, fee: true },
-    });
+    // 2) Find students based on STUDID or parent
+    let students: { id: number; fullname: string; fee: number }[];
 
-    if (!students.length) {
-      return res
-        .status(404)
-        .json({ message: "No students found for this parent" });
+    if (STUDID) {
+      // If STUDID is provided, search by STUDID directly
+      const studentBySTUDID = await prisma.student.findUnique({
+        where: { STUDID: STUDID },
+        include: {
+          parentUser: true,
+          classes: true,
+          StudentFee: {
+            where: { isPaid: false },
+            include: { PaymentAllocation: true },
+          },
+        },
+      });
+
+      if (!studentBySTUDID) {
+        return res
+          .status(404)
+          .json({ message: "No student found with that STUDID" });
+      }
+
+      students = [studentBySTUDID]; // Return the student as an array
+    } else {
+      // Otherwise, find students for the parent using familyName or phone
+      students = await prisma.student.findMany({
+        where: { parentUserId: parent.id, isdeleted: false },
+        select: { id: true, fullname: true, fee: true },
+      });
+
+      if (!students.length) {
+        return res
+          .status(404)
+          .json({ message: "No students found for this parent" });
+      }
     }
 
     const studentIds = students.map((s) => s.id);
 
-    // 3) All unpaid fee rows (note: using student_fee field)
+    // 3) All unpaid fee rows (using student_fee field)
     const unpaidFees = await prisma.studentFee.findMany({
       where: { studentId: { in: studentIds }, isPaid: false },
       select: {
@@ -3538,7 +3727,7 @@ export const getFamilyBalanceByPhone = async (req: Request, res: Response) => {
         month: true,
         year: true,
         isPaid: true,
-        student_fee: true, // <— this is your per-row fee amount
+        student_fee: true, // Per-row fee amount
       },
       orderBy: [{ year: "asc" }, { month: "asc" }],
     });
@@ -3559,7 +3748,7 @@ export const getFamilyBalanceByPhone = async (req: Request, res: Response) => {
 
     const feeIds = unpaidFees.map((f) => f.id);
 
-    // 4) Allocations
+    // 4) Payment allocations
     const allocationSums = await prisma.paymentAllocation.groupBy({
       by: ["studentFeeId"],
       where: { studentFeeId: { in: feeIds } },
@@ -3570,9 +3759,9 @@ export const getFamilyBalanceByPhone = async (req: Request, res: Response) => {
       allocationSums.map((a) => [a.studentFeeId, toNum(a._sum.amount)])
     );
 
-    // student fallback (if a fee row has null student_fee)
+    // Fallback student fee if null student_fee
     const studentFeeFallback = new Map<number, number>(
-      students.map((s) => [s.id, toNum(s.fee as unknown as number)]) // if s.fee is Decimal, wrap with toNum
+      students.map((s) => [s.id, toNum(s.fee as unknown as number)]) // If fee is Decimal, use toNum
     );
 
     type MonthDue = { month: number; year: number; due: number };
@@ -5286,16 +5475,15 @@ export const payFullForMonthByPhone = async (req: Request, res: Response) => {
         )
       );
 
-   
-    console.log('Raw Payload:', {
-  parentPhone,
-  familyName,
-  month,
-  year,
-  studentIds,
-  selectedStudentIds,
-  studentId,
-});
+    console.log("Raw Payload:", {
+      parentPhone,
+      familyName,
+      month,
+      year,
+      studentIds,
+      selectedStudentIds,
+      studentId,
+    });
 
     const normalizedStudentIds: number[] =
       Array.isArray(payments) && payments.length
